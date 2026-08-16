@@ -1,5 +1,5 @@
 from models.user import User
-from repositories.user import UserRepository
+from repositories.interfaces.user import IUserRepository
 from exceptions.user import UserAlreadyExistsError
 
 
@@ -11,7 +11,7 @@ class RegisterService:
     def __init__(
         self,
         *,
-        user_repository: UserRepository,
+        user_repository: IUserRepository,
     ) -> None:
         self._user_repository = user_repository
 
