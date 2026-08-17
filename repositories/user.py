@@ -1,9 +1,10 @@
 from models.user import User
+from repositories.interfaces.user import IUserRepository
 
 
-class UserRepository:
+class UserRepository(IUserRepository):
     """
-    Repository responsible for storing and retrieving User objects.
+    Concrete repository for storing and retrieving User objects.
 
     Current implementation uses in-memory storage.
     It can later be replaced with SQLAlchemy without changing services.
