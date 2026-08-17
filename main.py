@@ -1,15 +1,14 @@
 import asyncio
 import logging
-import os
 
 from aiogram import Bot, Dispatcher
 
+from config import BOT_TOKEN, DATABASE_URL
 from core.database import Database
 from handlers.start import router as start_router
 from handlers.register import router as register_router
 from middlewares.logging import LoggingMiddleware
 from middlewares.services import ServicesMiddleware
-from config import TOKEN
 
 
 async def main() -> None:
@@ -20,15 +19,10 @@ async def main() -> None:
 
     logging.info("Bot starting...")
 
-    bot = Bot(token=TOKEN)
+    bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher()
 
-    database = Database(
-        database_url=os.getenv(
-            "DATABASE_URL",
-            "sqlite+aiosqlite:///./bot.db",
-        ),
-    )
+    database = Database(database_url=DATABASE_URL)
 
     await database.create_tables()
 
