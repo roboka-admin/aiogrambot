@@ -10,7 +10,7 @@ class UserRecord(Base):
 
     __tablename__ = "users"
 
-    telegram_id: Mapped[int] = mapped_column(primary_key=True)
+    telegram_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     name: Mapped[str] = mapped_column(String(100))
     age: Mapped[int]
     coins: Mapped[int] = mapped_column(default=0)

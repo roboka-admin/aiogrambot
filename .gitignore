@@ -4,3 +4,7 @@ __pycache__/
 *.db
 .venv/
 venv/
+.continue
+.vscode
+.zcode
+.gitignore
