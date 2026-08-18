@@ -2,6 +2,7 @@ from aiogram import Router
 from aiogram.filters import CommandStart
 from aiogram.types import Message
 
+from keyboards.menu import main_menu
 from keyboards.start import start_keyboard
 from services.user import UserService
 
@@ -22,7 +23,8 @@ async def start_handler(
     if is_registered:
         await message.answer(
             f"سلام {message.from_user.first_name} 👋\n"
-            "خوش آمدید."
+            "خوش آمدید.",
+            reply_markup=main_menu,
         )
         return
 
