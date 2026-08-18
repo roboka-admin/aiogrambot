@@ -5,6 +5,7 @@ from aiogram import Bot, Dispatcher
 
 from config import BOT_TOKEN, DATABASE_URL
 from core.database import Database
+from handlers.profile import router as profile_router
 from handlers.start import router as start_router
 from handlers.register import router as register_router
 from middlewares.logging import LoggingMiddleware
@@ -31,6 +32,7 @@ async def main() -> None:
 
     dp.include_router(start_router)
     dp.include_router(register_router)
+    dp.include_router(profile_router)
 
     try:
         await dp.start_polling(bot)
