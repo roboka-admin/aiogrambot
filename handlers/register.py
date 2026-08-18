@@ -6,6 +6,7 @@ from exceptions.user import UserAlreadyExistsError
 from keyboards.register import cancel_register
 from keyboards.start import start_keyboard
 from services.register import RegisterService
+from services.user import UserService
 from states.register import RegisterStates
 from validators.register import validate_age, validate_name
 
@@ -17,13 +18,20 @@ router = Router()
 async def start_registration(
     callback: CallbackQuery,
     state: FSMContext,
+    user_service: UserService,
 ) -> None:
-    """
-    Start the registration process.
-    """
+    """Start registration only for users who are not registered."""
+
+    is_registered = await user_service.exists(callback.from_user.id)
+
+    if is_registered:
+        await callback.answer(
+            "شما قبلاً ثبت نام کرده‌اید.",
+            show_alert=True,
+        )
+        return
 
     await callback.answer()
-
     await state.set_state(RegisterStates.waiting_name)
 
     if callback.message:
@@ -38,9 +46,7 @@ async def process_name(
     message: Message,
     state: FSMContext,
 ) -> None:
-    """
-    Handle user's name.
-    """
+    """Handle user's name."""
 
     name = message.text.strip()
 
@@ -51,7 +57,6 @@ async def process_name(
         return
 
     await state.update_data(name=name)
-
     await state.set_state(RegisterStates.waiting_age)
 
     await message.answer(
@@ -74,9 +79,7 @@ async def process_age(
     state: FSMContext,
     register_service: RegisterService,
 ) -> None:
-    """
-    Handle user's age and complete registration.
-    """
+    """Handle user's age and complete registration."""
 
     if not validate_age(message.text):
         await message.answer(
@@ -87,21 +90,16 @@ async def process_age(
     data = await state.get_data()
 
     try:
-
         user = await register_service.register(
             telegram_id=message.from_user.id,
             name=data["name"],
             age=int(message.text),
         )
-
     except UserAlreadyExistsError:
-
         await message.answer(
             "❌ شما قبلاً ثبت نام کرده‌اید."
         )
-
         await state.clear()
-
         return
 
     await state.clear()
@@ -127,12 +125,9 @@ async def cancel_registration(
     callback: CallbackQuery,
     state: FSMContext,
 ) -> None:
-    """
-    Cancel registration.
-    """
+    """Cancel registration."""
 
     await callback.answer()
-
     await state.clear()
 
     if callback.message:
