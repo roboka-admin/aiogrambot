@@ -13,8 +13,8 @@ main_menu = ReplyKeyboardMarkup(
 
 edit_profile_menu = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="✏️ تغییر نام")],
-        [KeyboardButton(text="🎂 تغییر سن")],
+        [KeyboardButton(text="✏️ تغییر نام"),
+        KeyboardButton(text="🎂 تغییر سن")],
         [KeyboardButton(text="❌ لغو")],
     ],
     resize_keyboard=True,
