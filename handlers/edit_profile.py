@@ -60,14 +60,7 @@ async def change_age_handler(
     await message.answer("سن جدید خود را ارسال کنید:")
 
 
-@router.message(
-    F.text == "❌ لغو",
-    EditProfileStates.waiting_name,
-)
-@router.message(
-    F.text == "❌ لغو",
-    EditProfileStates.waiting_age,
-)
+@router.message(F.text == "❌ لغو")
 async def cancel_edit_handler(
     message: Message,
     state: FSMContext,
