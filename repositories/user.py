@@ -48,12 +48,11 @@ class UserRepository(IUserRepository):
 
         return self._to_domain(record)
 
-    async def update(self, user: User) -> User:
+    async def update(self, user: User) -> User | None:
         record = await self._session.get(UserRecord, user.telegram_id)
 
         if record is None:
-            record = UserRecord(telegram_id=user.telegram_id)
-            self._session.add(record)
+            return None
 
         record.name = user.name
         record.age = user.age
