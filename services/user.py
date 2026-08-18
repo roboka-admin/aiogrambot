@@ -18,27 +18,20 @@ class UserService:
 
     async def get_user(self, telegram_id: int) -> User:
         user = await self._user_repository.get_by_telegram_id(telegram_id)
+
         if user is None:
             raise UserNotFoundError()
+
         return user
 
     async def update_name(self, telegram_id: int, name: str) -> User:
         user = await self.get_user(telegram_id)
-        name = name.strip()
+        user.name = name.strip()
 
-        if not name:
-            raise ValueError("Name cannot be empty")
-        if len(name) > 100:
-            raise ValueError("Name is too long")
-
-        user.name = name
         return await self._user_repository.update(user)
 
     async def update_age(self, telegram_id: int, age: int) -> User:
         user = await self.get_user(telegram_id)
-
-        if not 1 <= age <= 120:
-            raise ValueError("Age must be between 1 and 120")
-
         user.age = age
+
         return await self._user_repository.update(user)
