@@ -21,7 +21,8 @@ async def start_handler(
 
     if is_registered:
         await message.answer(
-            "شما قبلاً ثبت نام کرده‌اید."
+            f"سلام {message.from_user.first_name} 👋\n"
+            "خوش آمدید."
         )
         return
 
