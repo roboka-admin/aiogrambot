@@ -6,6 +6,7 @@ from aiogram.types import TelegramObject
 from core.database import Database
 from repositories.user import UserRepository
 from services.register import RegisterService
+from services.user import UserService
 
 
 class ServicesMiddleware(BaseMiddleware):
@@ -29,7 +30,11 @@ class ServicesMiddleware(BaseMiddleware):
                 register_service = RegisterService(
                     user_repository=user_repository,
                 )
+                user_service = UserService(
+                    user_repository=user_repository,
+                )
 
                 data["register_service"] = register_service
+                data["user_service"] = user_service
 
                 return await handler(event, data)
