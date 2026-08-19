@@ -70,6 +70,11 @@ async def user_details_handler(
     )
 
 
+@router.callback_query(F.data == "noop")
+async def noop_handler(callback: CallbackQuery) -> None:
+    await callback.answer()
+
+
 async def _show_users_page(
     *,
     message: Message,
@@ -77,7 +82,7 @@ async def _show_users_page(
     page: int,
     edit: bool = False,
 ) -> None:
-    users, total = await user_service.get_users_page(
+    users, total, page = await user_service.get_users_page(
         page=page,
         page_size=_PAGE_SIZE,
     )
@@ -91,8 +96,6 @@ async def _show_users_page(
         return
 
     total_pages = ceil(total / _PAGE_SIZE)
-    page = min(max(page, 0), total_pages - 1)
-
     text = (
         "👤 کاربران\n\n"
         f"تعداد کل کاربران: {total}\n"
