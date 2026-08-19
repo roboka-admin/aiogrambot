@@ -4,9 +4,14 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 
-from callbacks.admin import AdminUserCallback, AdminUsersCallback
+from callbacks.admin import (
+    AdminUserActionCallback,
+    AdminUserCallback,
+    AdminUsersCallback,
+)
 from filters.admin import AdminFilter
 from keyboards.admin import admin_menu
+from keyboards.admin_user_actions import user_actions_keyboard
 from keyboards.admin_users import users_keyboard
 from services.user import UserService
 
@@ -29,11 +34,7 @@ async def admin_handler(message: Message) -> None:
 
 @router.message(F.text == "👤 کاربران")
 async def users_handler(message: Message, user_service: UserService) -> None:
-    await _show_users_page(
-        message=message,
-        user_service=user_service,
-        page=0,
-    )
+    await _show_users_page(message=message, user_service=user_service, page=0)
 
 
 @router.callback_query(AdminUsersCallback.filter())
@@ -58,16 +59,46 @@ async def user_details_handler(
     user_service: UserService,
 ) -> None:
     user = await user_service.get_user(callback_data.telegram_id)
-    await callback.answer()
-    await callback.message.answer(
-        "👤 اطلاعات کاربر\n\n"
-        f"نام: {user.name}\n"
-        f"سن: {user.age}\n"
-        f"شناسه: {user.telegram_id}\n"
-        f"سکه: {user.coins}\n"
-        f"اخطار: {user.warnings}\n"
-        f"وضعیت: {user.status.value}"
+    await callback.message.edit_text(
+        _user_details_text(user),
+        reply_markup=user_actions_keyboard(user),
     )
+    await callback.answer()
+
+
+@router.callback_query(AdminUserActionCallback.filter())
+async def user_action_handler(
+    callback: CallbackQuery,
+    callback_data: AdminUserActionCallback,
+    user_service: UserService,
+) -> None:
+    action = callback_data.action
+    telegram_id = callback_data.telegram_id
+
+    if action == "add_coin":
+        user = await user_service.add_coins(telegram_id)
+        notice = "یک سکه اضافه شد."
+    elif action == "remove_coin":
+        user = await user_service.remove_coins(telegram_id)
+        notice = "یک سکه کم شد."
+    elif action == "add_warning":
+        user = await user_service.add_warning(telegram_id)
+        notice = "یک اخطار اضافه شد."
+    elif action == "block":
+        user = await user_service.block_user(telegram_id)
+        notice = "کاربر مسدود شد."
+    elif action == "unblock":
+        user = await user_service.unblock_user(telegram_id)
+        notice = "کاربر رفع مسدودیت شد."
+    else:
+        await callback.answer("عملیات نامعتبر است.", show_alert=True)
+        return
+
+    await callback.message.edit_text(
+        _user_details_text(user),
+        reply_markup=user_actions_keyboard(user),
+    )
+    await callback.answer(notice)
 
 
 @router.callback_query(F.data == "noop")
@@ -111,3 +142,15 @@ async def _show_users_page(
         await message.edit_text(text, reply_markup=keyboard)
     else:
         await message.answer(text, reply_markup=keyboard)
+
+
+def _user_details_text(user) -> str:
+    return (
+        "👤 اطلاعات کاربر\n\n"
+        f"نام: {user.name}\n"
+        f"سن: {user.age}\n"
+        f"شناسه: {user.telegram_id}\n"
+        f"سکه: {user.coins}\n"
+        f"اخطار: {user.warnings}\n"
+        f"وضعیت: {user.status.value}"
+    )
