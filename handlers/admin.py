@@ -1,7 +1,6 @@
 from math import ceil
 
-from aiogram import Bot, F, Router
-from aiogram.exceptions import TelegramAPIError
+from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -18,6 +17,7 @@ from keyboards.admin_cancel import admin_cancel_keyboard
 from keyboards.admin_user_actions import user_actions_keyboard
 from keyboards.admin_users import users_keyboard
 from models.user import User, UserStatus
+from services.notification import NotificationService
 from services.user import UserService
 from states.admin import AdminUserStates
 
@@ -153,7 +153,7 @@ async def coin_amount_handler(
     message: Message,
     state: FSMContext,
     user_service: UserService,
-    bot: Bot,
+    notification_service: NotificationService,
 ) -> None:
     text = (message.text or "").strip()
     if not text.isdigit() or int(text) <= 0:
@@ -169,20 +169,21 @@ async def coin_amount_handler(
 
     if data["coin_action"] == "add_coin":
         user = await user_service.add_coins(telegram_id, amount)
-        notice = f"✅ {amount} سکه اضافه شد."
-        user_notice = (
-            f"🪙 {amount} سکه به حساب شما اضافه شد.\n"
-            f"موجودی فعلی: {user.coins} سکه"
+        await notification_service.coins_added(
+            telegram_id,
+            amount,
+            user.coins,
         )
+        notice = f"✅ {amount} سکه اضافه شد."
     else:
         user = await user_service.remove_coins(telegram_id, amount)
-        notice = f"✅ {amount} سکه کم شد."
-        user_notice = (
-            f"🪙 {amount} سکه از حساب شما کم شد.\n"
-            f"موجودی فعلی: {user.coins} سکه"
+        await notification_service.coins_removed(
+            telegram_id,
+            amount,
+            user.coins,
         )
+        notice = f"✅ {amount} سکه کم شد."
 
-    await _notify_user(bot, telegram_id, user_notice)
     await state.clear()
     await message.answer(notice)
     await message.answer(
@@ -196,7 +197,7 @@ async def user_action_handler(
     callback: CallbackQuery,
     callback_data: AdminUserActionCallback,
     user_service: UserService,
-    bot: Bot,
+    notification_service: NotificationService,
 ) -> None:
     action = callback_data.action
     telegram_id = callback_data.telegram_id
@@ -206,30 +207,23 @@ async def user_action_handler(
         notice = "یک اخطار اضافه شد."
 
         if user.status is UserStatus.BLOCKED:
-            user_notice = (
-                "⚠️ شما ۳ اخطار دریافت کرده‌اید و حساب شما مسدود شد."
-            )
+            await notification_service.user_auto_blocked(telegram_id)
         else:
-            user_notice = (
-                "⚠️ یک اخطار توسط مدیریت برای شما ثبت شد.\n"
-                f"تعداد اخطار فعلی: {user.warnings} از ۳"
+            await notification_service.warning_added(
+                telegram_id,
+                user.warnings,
             )
     elif action == "block":
         user = await user_service.block_user(telegram_id)
         notice = "کاربر مسدود شد."
-        user_notice = "🚫 حساب شما توسط مدیریت مسدود شد."
+        await notification_service.user_blocked(telegram_id)
     elif action == "unblock":
         user = await user_service.unblock_user(telegram_id)
         notice = "کاربر رفع مسدودیت شد و اخطارها صفر شدند."
-        user_notice = (
-            "✅ حساب شما توسط مدیریت رفع مسدودیت شد.\n"
-            "تعداد اخطارهای شما به ۰ بازنشانی شد."
-        )
+        await notification_service.user_unblocked(telegram_id)
     else:
         await callback.answer("عملیات نامعتبر است.", show_alert=True)
         return
-
-    await _notify_user(bot, telegram_id, user_notice)
 
     await callback.message.edit_text(
         _user_details_text(user),
@@ -275,13 +269,6 @@ async def _show_users_page(
         await message.edit_text(text, reply_markup=keyboard)
     else:
         await message.answer(text, reply_markup=keyboard)
-
-
-async def _notify_user(bot: Bot, telegram_id: int, text: str) -> None:
-    try:
-        await bot.send_message(telegram_id, text)
-    except TelegramAPIError:
-        pass
 
 
 def _user_details_text(user: User) -> str:
