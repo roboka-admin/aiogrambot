@@ -1,7 +1,7 @@
 from math import ceil
 
 from exceptions.user import UserNotFoundError
-from models.user import User
+from models.user import User, UserStatus
 from repositories.interfaces.user import IUserRepository
 
 
@@ -39,13 +39,43 @@ class UserService:
     async def update_name(self, telegram_id: int, name: str) -> User:
         user = await self.get_user(telegram_id)
         user.name = name.strip()
-        updated_user = await self._user_repository.update(user)
-        assert updated_user is not None
-        return updated_user
+        return await self._save(user)
 
     async def update_age(self, telegram_id: int, age: int) -> User:
         user = await self.get_user(telegram_id)
         user.age = age
+        return await self._save(user)
+
+    async def add_coins(self, telegram_id: int, amount: int = 1) -> User:
+        if amount <= 0:
+            raise ValueError("Amount must be positive")
+        user = await self.get_user(telegram_id)
+        user.coins += amount
+        return await self._save(user)
+
+    async def remove_coins(self, telegram_id: int, amount: int = 1) -> User:
+        if amount <= 0:
+            raise ValueError("Amount must be positive")
+        user = await self.get_user(telegram_id)
+        user.coins = max(0, user.coins - amount)
+        return await self._save(user)
+
+    async def add_warning(self, telegram_id: int) -> User:
+        user = await self.get_user(telegram_id)
+        user.warnings += 1
+        return await self._save(user)
+
+    async def block_user(self, telegram_id: int) -> User:
+        user = await self.get_user(telegram_id)
+        user.status = UserStatus.BLOCKED
+        return await self._save(user)
+
+    async def unblock_user(self, telegram_id: int) -> User:
+        user = await self.get_user(telegram_id)
+        user.status = UserStatus.ACTIVE
+        return await self._save(user)
+
+    async def _save(self, user: User) -> User:
         updated_user = await self._user_repository.update(user)
         assert updated_user is not None
         return updated_user
