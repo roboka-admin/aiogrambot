@@ -4,17 +4,28 @@ from models.user import User
 
 
 class IUserRepository(Protocol):
-    """
-    Abstraction for the user data access required by services.
-
-    Services depend on this interface, not on a concrete repository
-    implementation.
-    """
+    """Abstraction for user persistence."""
 
     async def exists(self, telegram_id: int) -> bool:
-        """Check whether a user exists."""
         ...
 
     async def create(self, user: User) -> User:
-        """Store a new user."""
+        ...
+
+    async def get_by_telegram_id(self, telegram_id: int) -> User | None:
+        ...
+
+    async def update(self, user: User) -> User | None:
+        ...
+
+    async def delete(self, telegram_id: int) -> bool:
+        ...
+
+    async def list_all(self) -> list[User]:
+        ...
+
+    async def list_page(self, *, offset: int, limit: int) -> list[User]:
+        ...
+
+    async def count(self) -> int:
         ...
