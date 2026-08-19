@@ -13,6 +13,7 @@ from callbacks.admin import (
 from exceptions.user import UserNotFoundError
 from filters.admin import AdminFilter
 from keyboards.admin import admin_menu
+from keyboards.admin_cancel import admin_cancel_keyboard
 from keyboards.admin_user_actions import user_actions_keyboard
 from keyboards.admin_users import users_keyboard
 from services.user import UserService
@@ -27,7 +28,8 @@ _PAGE_SIZE = 5
 
 
 @router.message(Command("admin"))
-async def admin_handler(message: Message) -> None:
+async def admin_handler(message: Message, state: FSMContext) -> None:
+    await state.clear()
     await message.answer(
         "👨‍💼 پنل مدیریت\n\n"
         "یکی از گزینه‌ها را انتخاب کنید:",
@@ -46,7 +48,20 @@ async def find_user_start_handler(
     state: FSMContext,
 ) -> None:
     await state.set_state(AdminUserStates.waiting_for_user_id)
-    await callback.message.answer("🔎 شناسه عددی کاربر را ارسال کنید:")
+    await callback.message.answer(
+        "🔎 شناسه عددی کاربر را ارسال کنید:",
+        reply_markup=admin_cancel_keyboard,
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_cancel")
+async def admin_cancel_handler(
+    callback: CallbackQuery,
+    state: FSMContext,
+) -> None:
+    await state.clear()
+    await callback.message.edit_text("❌ عملیات لغو شد.")
     await callback.answer()
 
 
@@ -58,14 +73,20 @@ async def find_user_handler(
 ) -> None:
     text = (message.text or "").strip()
     if not text.isdigit():
-        await message.answer("❌ شناسه کاربر باید فقط شامل عدد باشد. دوباره ارسال کنید:")
+        await message.answer(
+            "❌ شناسه کاربر باید فقط شامل عدد باشد. دوباره ارسال کنید:",
+            reply_markup=admin_cancel_keyboard,
+        )
         return
 
     telegram_id = int(text)
     try:
         user = await user_service.get_user(telegram_id)
     except UserNotFoundError:
-        await message.answer("❌ کاربری با این شناسه پیدا نشد. دوباره تلاش کنید:")
+        await message.answer(
+            "❌ کاربری با این شناسه پیدا نشد. دوباره تلاش کنید:",
+            reply_markup=admin_cancel_keyboard,
+        )
         return
 
     await state.clear()
@@ -116,7 +137,10 @@ async def coin_action_start_handler(
         telegram_id=callback_data.telegram_id,
     )
     action_text = "افزایش" if callback_data.action == "add_coin" else "کاهش"
-    await callback.message.answer(f"➖➕ مقدار {action_text} سکه را به صورت عدد ارسال کنید:")
+    await callback.message.answer(
+        f"➖➕ مقدار {action_text} سکه را به صورت عدد ارسال کنید:",
+        reply_markup=admin_cancel_keyboard,
+    )
     await callback.answer()
 
 
@@ -128,7 +152,10 @@ async def coin_amount_handler(
 ) -> None:
     text = (message.text or "").strip()
     if not text.isdigit() or int(text) <= 0:
-        await message.answer("❌ مقدار باید یک عدد صحیح بزرگ‌تر از صفر باشد. دوباره ارسال کنید:")
+        await message.answer(
+            "❌ مقدار باید یک عدد صحیح بزرگ‌تر از صفر باشد. دوباره ارسال کنید:",
+            reply_markup=admin_cancel_keyboard,
+        )
         return
 
     amount = int(text)
