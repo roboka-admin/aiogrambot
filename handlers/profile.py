@@ -1,6 +1,8 @@
 from aiogram import F, Router
 from aiogram.types import Message
 
+from models.user import User
+
 
 router = Router()
 
