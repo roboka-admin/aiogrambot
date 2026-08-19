@@ -4,6 +4,8 @@ from exceptions.user import UserNotFoundError
 from models.user import User, UserStatus
 from repositories.interfaces.user import IUserRepository
 
+_MAX_WARNINGS = 3
+
 
 class UserService:
     """Handles general user-related business operations."""
@@ -63,6 +65,10 @@ class UserService:
     async def add_warning(self, telegram_id: int) -> User:
         user = await self.get_user(telegram_id)
         user.warnings += 1
+
+        if user.warnings >= _MAX_WARNINGS:
+            user.status = UserStatus.BLOCKED
+
         return await self._save(user)
 
     async def block_user(self, telegram_id: int) -> User:
