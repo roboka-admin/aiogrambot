@@ -4,12 +4,12 @@ from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
 from exceptions.user import UserNotFoundError
-from models.user import User
+from models.user import User, UserStatus
 from services.user import UserService
 
 
 class UserMiddleware(BaseMiddleware):
-    """Load the current user and inject it into handler data."""
+    """Load the current user, block banned users, and inject the user."""
 
     async def __call__(
         self,
@@ -30,6 +30,9 @@ class UserMiddleware(BaseMiddleware):
                 user = await user_service.get_user(telegram_user.id)
             except UserNotFoundError:
                 pass
+            else:
+                if user.status == UserStatus.BLOCKED:
+                    return None
 
         data["user"] = user
 
