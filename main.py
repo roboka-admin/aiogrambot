@@ -30,7 +30,9 @@ async def main() -> None:
     await database.create_tables()
 
     dp.update.middleware(LoggingMiddleware())
-    dp.update.middleware(ServicesMiddleware(database=database))
+    dp.update.middleware(
+        ServicesMiddleware(database=database, bot=bot)
+    )
     dp.update.middleware(UserMiddleware())
 
     dp.include_router(start_router)
