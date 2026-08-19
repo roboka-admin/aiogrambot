@@ -4,7 +4,6 @@ from aiogram.types import Message
 
 from exceptions.user import UserNotFoundError
 from keyboards.menu import edit_profile_menu, main_menu
-from services.user import UserService
 from states.profile import EditProfileStates
 from validators.register import validate_age, validate_name
 
@@ -12,19 +11,16 @@ from validators.register import validate_age, validate_name
 router = Router()
 
 
-async def _is_registered(message: Message, user_service: UserService) -> bool:
-    if message.from_user is None:
-        return False
-
-    return await user_service.exists(message.from_user.id)
+async def _is_registered(message: Message, user: User | None) -> bool:
+    return user is not None
 
 
 @router.message(F.text == "✏️ ویرایش پروفایل")
 async def edit_profile_handler(
     message: Message,
-    user_service: UserService,
+    user: User | None,
 ) -> None:
-    if not await _is_registered(message, user_service):
+    if not await _is_registered(message, user):
         await message.answer("برای استفاده از امکانات ربات ابتدا ثبت نام کنید.")
         return
 
@@ -38,9 +34,9 @@ async def edit_profile_handler(
 async def change_name_handler(
     message: Message,
     state: FSMContext,
-    user_service: UserService,
+    user: User | None,
 ) -> None:
-    if not await _is_registered(message, user_service):
+    if not await _is_registered(message, user):
         return
 
     await state.set_state(EditProfileStates.waiting_name)
@@ -51,9 +47,9 @@ async def change_name_handler(
 async def change_age_handler(
     message: Message,
     state: FSMContext,
-    user_service: UserService,
+    user: User | None,
 ) -> None:
-    if not await _is_registered(message, user_service):
+    if not await _is_registered(message, user):
         return
 
     await state.set_state(EditProfileStates.waiting_age)
@@ -76,9 +72,9 @@ async def cancel_edit_handler(
 async def save_name_handler(
     message: Message,
     state: FSMContext,
-    user_service: UserService,
+    user: User | None,
 ) -> None:
-    if message.from_user is None or message.text is None:
+    if message.from_user is None or message.text is None or user is None:
         return
 
     name = message.text.strip()
@@ -88,7 +84,7 @@ async def save_name_handler(
         return
 
     try:
-        await user_service.update_name(message.from_user.id, name)
+        await user_service.update_name(user.telegram_id, name)
     except UserNotFoundError:
         await state.clear()
         await message.answer("برای استفاده از امکانات ربات ابتدا ثبت نام کنید.")
@@ -110,9 +106,9 @@ async def invalid_name_handler(message: Message) -> None:
 async def save_age_handler(
     message: Message,
     state: FSMContext,
-    user_service: UserService,
+    user: User | None,
 ) -> None:
-    if message.from_user is None or message.text is None:
+    if message.from_user is None or message.text is None or user is None:
         return
 
     if not validate_age(message.text):
@@ -121,7 +117,7 @@ async def save_age_handler(
 
     try:
         await user_service.update_age(
-            message.from_user.id,
+            user.telegram_id,
             int(message.text),
         )
     except UserNotFoundError:

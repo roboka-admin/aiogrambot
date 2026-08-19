@@ -11,6 +11,7 @@ from handlers.register import router as register_router
 from handlers.start import router as start_router
 from middlewares.logging import LoggingMiddleware
 from middlewares.services import ServicesMiddleware
+from middlewares.user import UserMiddleware
 
 
 async def main() -> None:
@@ -29,6 +30,7 @@ async def main() -> None:
 
     dp.update.middleware(LoggingMiddleware())
     dp.update.middleware(ServicesMiddleware(database=database))
+    dp.update.middleware(UserMiddleware())
 
     dp.include_router(start_router)
     dp.include_router(register_router)

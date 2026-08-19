@@ -6,7 +6,6 @@ from exceptions.user import UserAlreadyExistsError
 from keyboards.register import cancel_register
 from keyboards.start import start_keyboard
 from services.register import RegisterService
-from services.user import UserService
 from states.register import RegisterStates
 from validators.register import validate_age, validate_name
 
@@ -18,13 +17,11 @@ router = Router()
 async def start_registration(
     callback: CallbackQuery,
     state: FSMContext,
-    user_service: UserService,
+    user: User | None,
 ) -> None:
     """Start registration only for users who are not registered."""
 
-    is_registered = await user_service.exists(callback.from_user.id)
-
-    if is_registered:
+    if user is not None:
         await callback.answer(
             "شما قبلاً ثبت نام کرده‌اید.",
             show_alert=True,

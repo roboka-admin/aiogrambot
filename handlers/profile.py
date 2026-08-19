@@ -1,9 +1,6 @@
 from aiogram import F, Router
 from aiogram.types import Message
 
-from exceptions.user import UserNotFoundError
-from services.user import UserService
-
 
 router = Router()
 
@@ -11,14 +8,9 @@ router = Router()
 @router.message(F.text == "👤 پروفایل")
 async def profile_handler(
     message: Message,
-    user_service: UserService,
+    user: User | None,
 ) -> None:
-    if message.from_user is None:
-        return
-
-    try:
-        user = await user_service.get_user(message.from_user.id)
-    except UserNotFoundError:
+    if user is None:
         await message.answer(
             "برای استفاده از امکانات ربات ابتدا ثبت نام کنید."
         )
