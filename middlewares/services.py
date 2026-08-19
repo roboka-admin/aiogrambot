@@ -25,16 +25,15 @@ class ServicesMiddleware(BaseMiddleware):
         data: dict[str, Any],
     ) -> Any:
         async with self._database.get_session() as session:
-            async with session.begin():
-                user_repository = UserRepository(session)
-                register_service = RegisterService(
-                    user_repository=user_repository,
-                )
-                user_service = UserService(
-                    user_repository=user_repository,
-                )
+            user_repository = UserRepository(session)
+            register_service = RegisterService(
+                user_repository=user_repository,
+            )
+            user_service = UserService(
+                user_repository=user_repository,
+            )
 
-                data["register_service"] = register_service
-                data["user_service"] = user_service
+            data["register_service"] = register_service
+            data["user_service"] = user_service
 
-                return await handler(event, data)
+            return await handler(event, data)
