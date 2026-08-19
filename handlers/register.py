@@ -5,6 +5,7 @@ from aiogram.types import CallbackQuery, Message
 from exceptions.user import UserAlreadyExistsError
 from keyboards.register import cancel_register
 from keyboards.start import start_keyboard
+from models.user import User
 from services.register import RegisterService
 from states.register import RegisterStates
 from validators.register import validate_age, validate_name
@@ -48,26 +49,18 @@ async def process_name(
     name = message.text.strip()
 
     if not validate_name(name):
-        await message.answer(
-            "❌ نام وارد شده معتبر نیست."
-        )
+        await message.answer("❌ نام وارد شده معتبر نیست.")
         return
 
     await state.update_data(name=name)
     await state.set_state(RegisterStates.waiting_age)
 
-    await message.answer(
-        "لطفاً سن خود را وارد کنید."
-    )
+    await message.answer("لطفاً سن خود را وارد کنید.")
 
 
 @router.message(RegisterStates.waiting_name)
-async def invalid_name(
-    message: Message,
-) -> None:
-    await message.answer(
-        "❌ لطفاً نام را فقط به صورت متن ارسال کنید."
-    )
+async def invalid_name(message: Message) -> None:
+    await message.answer("❌ لطفاً نام را فقط به صورت متن ارسال کنید.")
 
 
 @router.message(RegisterStates.waiting_age, F.text)
@@ -79,9 +72,7 @@ async def process_age(
     """Handle user's age and complete registration."""
 
     if not validate_age(message.text):
-        await message.answer(
-            "❌ سن وارد شده معتبر نیست."
-        )
+        await message.answer("❌ سن وارد شده معتبر نیست.")
         return
 
     data = await state.get_data()
@@ -93,9 +84,7 @@ async def process_age(
             age=int(message.text),
         )
     except UserAlreadyExistsError:
-        await message.answer(
-            "❌ شما قبلاً ثبت نام کرده‌اید."
-        )
+        await message.answer("❌ شما قبلاً ثبت نام کرده‌اید.")
         await state.clear()
         return
 
@@ -109,12 +98,8 @@ async def process_age(
 
 
 @router.message(RegisterStates.waiting_age)
-async def invalid_age(
-    message: Message,
-) -> None:
-    await message.answer(
-        "❌ لطفاً سن را فقط به صورت عدد ارسال کنید."
-    )
+async def invalid_age(message: Message) -> None:
+    await message.answer("❌ لطفاً سن را فقط به صورت عدد ارسال کنید.")
 
 
 @router.callback_query(F.data == "cancel_register")
