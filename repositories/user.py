@@ -1,5 +1,5 @@
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.user import User, UserStatus
@@ -34,23 +34,15 @@ class UserRepository(IUserRepository):
         )
         return result.scalar_one_or_none() is not None
 
-    async def get_by_telegram_id(
-        self,
-        telegram_id: int,
-    ) -> User | None:
+    async def get_by_telegram_id(self, telegram_id: int) -> User | None:
         result = await self._session.execute(
             select(UserRecord).where(UserRecord.telegram_id == telegram_id)
         )
         record = result.scalar_one_or_none()
-
-        if record is None:
-            return None
-
-        return self._to_domain(record)
+        return None if record is None else self._to_domain(record)
 
     async def update(self, user: User) -> User | None:
         record = await self._session.get(UserRecord, user.telegram_id)
-
         if record is None:
             return None
 
@@ -59,7 +51,6 @@ class UserRepository(IUserRepository):
         record.coins = user.coins
         record.warnings = user.warnings
         record.status = user.status.value
-
         await self._session.flush()
         return self._to_domain(record)
 
@@ -75,6 +66,21 @@ class UserRepository(IUserRepository):
             select(UserRecord).order_by(UserRecord.telegram_id)
         )
         return [self._to_domain(record) for record in result.scalars()]
+
+    async def list_page(self, *, offset: int, limit: int) -> list[User]:
+        result = await self._session.execute(
+            select(UserRecord)
+            .order_by(UserRecord.telegram_id)
+            .offset(offset)
+            .limit(limit)
+        )
+        return [self._to_domain(record) for record in result.scalars()]
+
+    async def count(self) -> int:
+        result = await self._session.execute(
+            select(func.count()).select_from(UserRecord)
+        )
+        return result.scalar_one()
 
     @staticmethod
     def _to_domain(record: UserRecord) -> User:
