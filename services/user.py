@@ -79,6 +79,7 @@ class UserService:
     async def unblock_user(self, telegram_id: int) -> User:
         user = await self.get_user(telegram_id)
         user.status = UserStatus.ACTIVE
+        user.warnings = 0
         return await self._save(user)
 
     async def _save(self, user: User) -> User:
