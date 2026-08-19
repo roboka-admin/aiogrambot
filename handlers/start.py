@@ -4,6 +4,7 @@ from aiogram.types import Message
 
 from keyboards.menu import main_menu
 from keyboards.start import start_keyboard
+from models.user import User
 
 
 router = Router()
