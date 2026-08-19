@@ -10,7 +10,9 @@ def users_keyboard(
     page: int,
     total_pages: int,
 ) -> InlineKeyboardMarkup:
-    rows: list[list[InlineKeyboardButton]] = []
+    rows: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text="🔎 جستجوی کاربر با ID", callback_data="admin_find_user")]
+    ]
 
     for user in users:
         rows.append([
@@ -43,7 +45,5 @@ def users_keyboard(
             )
         )
 
-    if navigation:
-        rows.append(navigation)
-
+    rows.append(navigation)
     return InlineKeyboardMarkup(inline_keyboard=rows)
