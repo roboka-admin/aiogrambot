@@ -1,19 +1,21 @@
 from typing import Any, Awaitable, Callable
 
-from aiogram import BaseMiddleware
+from aiogram import BaseMiddleware, Bot
 from aiogram.types import TelegramObject
 
 from core.database import Database
 from repositories.user import UserRepository
+from services.notification import NotificationService
 from services.register import RegisterService
 from services.user import UserService
 
 
 class ServicesMiddleware(BaseMiddleware):
-    """Create request-scoped repository and services."""
+    """Create request-scoped application services."""
 
-    def __init__(self, *, database: Database) -> None:
+    def __init__(self, *, database: Database, bot: Bot) -> None:
         self._database = database
+        self._notification_service = NotificationService(bot)
 
     async def __call__(
         self,
@@ -36,5 +38,6 @@ class ServicesMiddleware(BaseMiddleware):
 
                 data["register_service"] = register_service
                 data["user_service"] = user_service
+                data["notification_service"] = self._notification_service
 
                 return await handler(event, data)
