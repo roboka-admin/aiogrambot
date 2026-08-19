@@ -19,7 +19,7 @@ class NotificationService:
         await self._send(
             telegram_id,
             "⚠️ یک اخطار توسط مدیریت برای شما ثبت شد.\n"
-            f"تعداد اخطار فعلی: {warnings} از ۳",
+            f"تعداد اخطار فعلی: {warnings} از 3",
         )
 
     async def user_blocked(self, telegram_id: int) -> None:
@@ -31,14 +31,14 @@ class NotificationService:
     async def user_auto_blocked(self, telegram_id: int) -> None:
         await self._send(
             telegram_id,
-            "⚠️ شما ۳ اخطار دریافت کرده‌اید و حساب شما مسدود شد.",
+            "⚠️ شما 3 اخطار دریافت کرده‌اید و حساب شما مسدود شد.",
         )
 
     async def user_unblocked(self, telegram_id: int) -> None:
         await self._send(
             telegram_id,
             "✅ حساب شما توسط مدیریت رفع مسدودیت شد.\n"
-            "تعداد اخطارهای شما به ۰ بازنشانی شد.",
+            "تعداد اخطارهای شما به 0 بازنشانی شد.",
         )
 
     async def coins_added(
