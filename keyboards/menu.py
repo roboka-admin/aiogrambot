@@ -7,6 +7,7 @@ main_menu = ReplyKeyboardMarkup(
             KeyboardButton(text="👤 پروفایل"),
             KeyboardButton(text="✏️ ویرایش پروفایل"),
         ],
+        [KeyboardButton(text="🆘 پشتیبانی")],
     ],
     resize_keyboard=True,
 )
@@ -17,5 +18,10 @@ edit_profile_menu = ReplyKeyboardMarkup(
         KeyboardButton(text="🎂 تغییر سن")],
         [KeyboardButton(text="❌ لغو")],
     ],
+    resize_keyboard=True,
+)
+
+support_menu = ReplyKeyboardMarkup(
+    keyboard=[[KeyboardButton(text="❌ لغو")]],
     resize_keyboard=True,
 )
