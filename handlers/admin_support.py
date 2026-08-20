@@ -1,5 +1,6 @@
 import json
 from html import escape
+from math import ceil
 
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
@@ -25,6 +26,8 @@ router = Router()
 router.message.filter(AdminFilter())
 router.callback_query.filter(AdminFilter())
 
+_PAGE_SIZE = 10
+
 
 @router.message(F.text == "📩 پشتیبانی")
 async def admin_support_handler(
@@ -44,18 +47,11 @@ async def support_ticket_list_handler(
     support_service: SupportService,
 ) -> None:
     status = SupportStatus(callback_data.status)
-    tickets = await support_service.get_tickets_by_status(status)
-    status_text = "باز" if status is SupportStatus.OPEN else "بسته"
-
-    text = f"📩 تیکت‌های {status_text}\n\n"
-    if not tickets:
-        text += "تیکتی در این بخش وجود ندارد."
-    else:
-        text += "برای مشاهده جزئیات، یک تیکت را انتخاب کنید."
-
-    await callback.message.edit_text(
-        text,
-        reply_markup=support_tickets_keyboard(tickets=tickets),
+    await _show_ticket_page(
+        message=callback.message,
+        support_service=support_service,
+        status=status,
+        page=callback_data.page,
     )
     await callback.answer()
 
@@ -72,12 +68,16 @@ async def support_ticket_details_handler(
         await callback.answer("تیکت پیدا نشد.", show_alert=True)
         return
 
+    status = SupportStatus(callback_data.status)
     await callback.message.edit_text(
         await _ticket_details_text(
             ticket=ticket,
             user_service=user_service,
         ),
-        reply_markup=support_ticket_keyboard(),
+        reply_markup=support_ticket_keyboard(
+            status=status,
+            page=callback_data.page,
+        ),
         parse_mode="HTML",
     )
     await callback.answer()
@@ -94,6 +94,43 @@ async def support_back_handler(
         edit=True,
     )
     await callback.answer()
+
+
+async def _show_ticket_page(
+    *,
+    message: Message,
+    support_service: SupportService,
+    status: SupportStatus,
+    page: int,
+) -> None:
+    tickets = await support_service.get_tickets_by_status(status)
+    total = len(tickets)
+    total_pages = max(1, ceil(total / _PAGE_SIZE))
+    page = max(0, min(page, total_pages - 1))
+
+    start = page * _PAGE_SIZE
+    page_tickets = tickets[start : start + _PAGE_SIZE]
+    status_text = "باز" if status is SupportStatus.OPEN else "بسته"
+
+    text = f"📩 تیکت‌های {status_text}\n\n"
+    if not tickets:
+        text += "تیکتی در این بخش وجود ندارد."
+    else:
+        text += (
+            f"تعداد: {total}\n"
+            f"صفحه {page + 1} از {total_pages}\n\n"
+            "برای مشاهده جزئیات، یک تیکت را انتخاب کنید."
+        )
+
+    await message.edit_text(
+        text,
+        reply_markup=support_tickets_keyboard(
+            tickets=page_tickets,
+            status=status,
+            page=page,
+            total_pages=total_pages,
+        ),
+    )
 
 
 async def _show_support_overview(
