@@ -1,4 +1,4 @@
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.support import SupportStatus, SupportTicket, SupportUserSummary
@@ -54,6 +54,15 @@ class SupportRepository(ISupportRepository):
         record.status = ticket.status.value
         await self._session.flush()
         return self._to_domain(record)
+
+    async def update_user_status(self, telegram_id: int, status: SupportStatus) -> int:
+        result = await self._session.execute(
+            sql_update(SupportTicketRecord)
+            .where(SupportTicketRecord.user_telegram_id == telegram_id)
+            .values(status=status.value)
+        )
+        await self._session.flush()
+        return result.rowcount or 0
 
     @staticmethod
     def _to_domain(record: SupportTicketRecord) -> SupportTicket:
