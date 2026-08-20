@@ -33,3 +33,9 @@ class SupportService:
             return None
         ticket.status = SupportStatus.CLOSED
         return await self._support_repository.update(ticket)
+
+    async def close_user_conversation(self, telegram_id: int) -> int:
+        return await self._support_repository.update_user_status(telegram_id, SupportStatus.CLOSED)
+
+    async def reopen_user_conversation(self, telegram_id: int) -> int:
+        return await self._support_repository.update_user_status(telegram_id, SupportStatus.OPEN)
