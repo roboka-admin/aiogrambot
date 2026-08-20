@@ -2,16 +2,19 @@ import json
 from html import escape
 from math import ceil
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramAPIError
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from callbacks.admin_support import AdminSupportBackCallback, AdminSupportListCallback, AdminSupportUserCallback
+from callbacks.admin_support import AdminSupportActionCallback, AdminSupportBackCallback, AdminSupportListCallback, AdminSupportUserCallback
 from exceptions.user import UserNotFoundError
 from filters.admin import AdminFilter
 from keyboards.admin_support import support_overview_keyboard, support_user_messages_keyboard, support_users_keyboard
 from models.support import SupportStatus, SupportTicket, SupportUserSummary
 from services.support import SupportService
 from services.user import UserService
+from states.admin_support import AdminSupportStates
 
 
 router = Router()
@@ -41,29 +44,104 @@ async def support_user_list_handler(callback: CallbackQuery, callback_data: Admi
 
 @router.callback_query(AdminSupportUserCallback.filter())
 async def support_user_messages_handler(callback: CallbackQuery, callback_data: AdminSupportUserCallback, support_service: SupportService, user_service: UserService) -> None:
-    status = SupportStatus(callback_data.status)
-    tickets = await support_service.get_user_tickets_by_status(callback_data.telegram_id, status)
-    try:
-        user = await user_service.get_user(callback_data.telegram_id)
-        user_name = escape(user.name)
-        user_text = f'<a href="tg://user?id={callback_data.telegram_id}">{user_name}</a>'
-    except UserNotFoundError:
-        user_text = "کاربر پیدا نشد"
-    messages = "\n\n".join(_ticket_text(ticket) for ticket in tickets) or "پیامی وجود ندارد."
-    if len(messages) > 3500:
-        messages = f"{messages[:3500]}\n\n… پیام‌های بیشتر وجود دارد."
-    await callback.message.edit_text(
-        f"👤 کاربر: {user_text}\n🆔 <code>{callback_data.telegram_id}</code>\n📩 تعداد پیام‌ها: {len(tickets)}\n\n{messages}",
-        reply_markup=support_user_messages_keyboard(status=status, page=callback_data.page),
-        parse_mode="HTML",
+    await _show_user_conversation(
+        message=callback.message,
+        telegram_id=callback_data.telegram_id,
+        status=SupportStatus(callback_data.status),
+        page=callback_data.page,
+        support_service=support_service,
+        user_service=user_service,
     )
     await callback.answer()
+
+
+@router.callback_query(AdminSupportActionCallback.filter(F.action == "reply"))
+async def start_support_reply_handler(callback: CallbackQuery, callback_data: AdminSupportActionCallback, state: FSMContext) -> None:
+    await state.set_state(AdminSupportStates.waiting_reply)
+    await state.update_data(
+        telegram_id=callback_data.telegram_id,
+        status=callback_data.status,
+        page=callback_data.page,
+    )
+    await callback.answer()
+    await callback.message.answer(
+        "✉️ پاسخ خود را برای کاربر ارسال کنید.\n"
+        "می‌توانید متن، عکس، ویدیو، فایل، صوت، ویس، استیکر، گیف یا ویدیو مسیج ارسال کنید.\n\n"
+        "برای لغو، دکمه «❌ لغو» را ارسال کنید."
+    )
+
+
+@router.message(AdminSupportStates.waiting_reply, F.text == "❌ لغو")
+async def cancel_support_reply_handler(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("ارسال پاسخ لغو شد.")
+
+
+@router.message(AdminSupportStates.waiting_reply)
+async def send_support_reply_handler(message: Message, state: FSMContext, bot: Bot) -> None:
+    data = await state.get_data()
+    telegram_id = data.get("telegram_id")
+    if not isinstance(telegram_id, int):
+        await state.clear()
+        await message.answer("❌ اطلاعات گفتگو نامعتبر است.")
+        return
+
+    try:
+        await bot.send_message(telegram_id, "✉️ پاسخ پشتیبانی:")
+        await message.copy_to(chat_id=telegram_id)
+    except TelegramAPIError:
+        await message.answer("❌ ارسال پاسخ به کاربر ممکن نشد. ممکن است کاربر ربات را مسدود کرده باشد.")
+        return
+
+    await state.clear()
+    await message.answer("✅ پاسخ با موفقیت برای کاربر ارسال شد.")
+
+
+@router.callback_query(AdminSupportActionCallback.filter(F.action.in_({"close", "reopen"})))
+async def change_support_conversation_status_handler(callback: CallbackQuery, callback_data: AdminSupportActionCallback, support_service: SupportService, user_service: UserService) -> None:
+    if callback_data.action == "close":
+        await support_service.close_user_conversation(callback_data.telegram_id)
+        new_status = SupportStatus.CLOSED
+        result_text = "🔒 گفتگو بسته شد."
+    else:
+        await support_service.reopen_user_conversation(callback_data.telegram_id)
+        new_status = SupportStatus.OPEN
+        result_text = "🟢 گفتگو دوباره باز شد."
+
+    await _show_user_conversation(
+        message=callback.message,
+        telegram_id=callback_data.telegram_id,
+        status=new_status,
+        page=callback_data.page,
+        support_service=support_service,
+        user_service=user_service,
+    )
+    await callback.answer(result_text)
 
 
 @router.callback_query(AdminSupportBackCallback.filter())
 async def support_back_handler(callback: CallbackQuery, support_service: SupportService) -> None:
     await _show_support_overview(message=callback.message, support_service=support_service, edit=True)
     await callback.answer()
+
+
+async def _show_user_conversation(*, message: Message, telegram_id: int, status: SupportStatus, page: int, support_service: SupportService, user_service: UserService) -> None:
+    tickets = await support_service.get_user_tickets_by_status(telegram_id, status)
+    try:
+        user = await user_service.get_user(telegram_id)
+        user_name = escape(user.name)
+        user_text = f'<a href="tg://user?id={telegram_id}">{user_name}</a>'
+    except UserNotFoundError:
+        user_text = "کاربر پیدا نشد"
+    messages = "\n\n".join(_ticket_text(ticket) for ticket in tickets) or "پیامی وجود ندارد."
+    if len(messages) > 3500:
+        messages = f"{messages[:3500]}\n\n… پیام‌های بیشتر وجود دارد."
+    status_text = "🟢 باز" if status is SupportStatus.OPEN else "⚪ بسته"
+    await message.edit_text(
+        f"👤 کاربر: {user_text}\n🆔 <code>{telegram_id}</code>\n📌 وضعیت گفتگو: {status_text}\n📩 تعداد پیام‌ها: {len(tickets)}\n\n{messages}",
+        reply_markup=support_user_messages_keyboard(telegram_id=telegram_id, status=status, page=page),
+        parse_mode="HTML",
+    )
 
 
 async def _show_support_overview(*, message: Message, support_service: SupportService, edit: bool = False) -> None:
