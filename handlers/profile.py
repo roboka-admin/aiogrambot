@@ -1,23 +1,19 @@
 from aiogram import F, Router
 from aiogram.types import Message
 
+from middlewares.registration import RegistrationRequiredMiddleware
 from models.user import User
 
 
 router = Router()
+router.message.middleware(RegistrationRequiredMiddleware())
 
 
 @router.message(F.text == "👤 پروفایل")
 async def profile_handler(
     message: Message,
-    user: User | None,
+    user: User,
 ) -> None:
-    if user is None:
-        await message.answer(
-            "برای استفاده از امکانات ربات ابتدا ثبت نام کنید."
-        )
-        return
-
     await message.answer(
         "👤 پروفایل شما\n\n"
         f"نام: {user.name}\n"
