@@ -8,6 +8,7 @@ from aiogram.types import Message
 
 from config import ADMIN_IDS
 from keyboards.menu import main_menu, support_menu
+from middlewares.registration import RegistrationRequiredMiddleware
 from models.user import User
 from services.support import SupportService
 from states.support import SupportStates
@@ -15,6 +16,7 @@ from validators.support import validate_support_message
 
 
 router = Router()
+router.message.middleware(RegistrationRequiredMiddleware())
 logger = logging.getLogger(__name__)
 
 
@@ -22,14 +24,7 @@ logger = logging.getLogger(__name__)
 async def start_support_handler(
     message: Message,
     state: FSMContext,
-    user: User | None,
 ) -> None:
-    if user is None:
-        await message.answer(
-            "برای استفاده از امکانات ربات ابتدا ثبت نام کنید."
-        )
-        return
-
     await state.set_state(SupportStates.waiting_message)
     await message.answer(
         "پیام خود را برای پشتیبانی ارسال کنید.\n"
@@ -54,16 +49,11 @@ async def cancel_support_handler(
 async def submit_support_handler(
     message: Message,
     state: FSMContext,
-    user: User | None,
+    user: User,
     support_service: SupportService,
     bot: Bot,
 ) -> None:
-    if user is None or message.from_user is None:
-        await state.clear()
-        await message.answer(
-            "برای استفاده از امکانات ربات ابتدا ثبت نام کنید.",
-            reply_markup=main_menu,
-        )
+    if message.from_user is None:
         return
 
     if not validate_support_message(message):
@@ -101,50 +91,26 @@ def _serialize_support_message(message: Message) -> str:
         "file_unique_id": _get_file_unique_id(message),
         "file_name": _get_file_name(message),
     }
-    return json.dumps(
-        payload,
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
 def _get_file_id(message: Message) -> str | None:
     if message.photo:
         return message.photo[-1].file_id
-
-    for attribute in (
-        "video",
-        "document",
-        "audio",
-        "voice",
-        "sticker",
-        "animation",
-        "video_note",
-    ):
+    for attribute in ("video", "document", "audio", "voice", "sticker", "animation", "video_note"):
         content = getattr(message, attribute)
         if content is not None:
             return content.file_id
-
     return None
 
 
 def _get_file_unique_id(message: Message) -> str | None:
     if message.photo:
         return message.photo[-1].file_unique_id
-
-    for attribute in (
-        "video",
-        "document",
-        "audio",
-        "voice",
-        "sticker",
-        "animation",
-        "video_note",
-    ):
+    for attribute in ("video", "document", "audio", "voice", "sticker", "animation", "video_note"):
         content = getattr(message, attribute)
         if content is not None:
             return content.file_unique_id
-
     return None
 
 
@@ -153,34 +119,21 @@ def _get_file_name(message: Message) -> str | None:
         content = getattr(message, attribute)
         if content is not None:
             return content.file_name
-
     return None
 
 
-async def _notify_admins(
-    *,
-    bot: Bot,
-    message: Message,
-    ticket_id: int | None,
-    user: User,
-) -> None:
+async def _notify_admins(*, bot: Bot, message: Message, ticket_id: int | None, user: User) -> None:
     if ticket_id is None:
         return
-
     header = (
         "🆘 تیکت جدید پشتیبانی\n"
         f"شماره تیکت: #{ticket_id}\n"
         f"کاربر: {user.name}\n"
         f"Telegram ID: {user.telegram_id}"
     )
-
     for admin_id in ADMIN_IDS:
         try:
             await bot.send_message(admin_id, header)
             await message.copy_to(chat_id=admin_id)
         except TelegramAPIError:
-            logger.warning(
-                "Could not deliver support ticket %s to admin %s",
-                ticket_id,
-                admin_id,
-            )
+            logger.warning("Could not deliver support ticket %s to admin %s", ticket_id, admin_id)
