@@ -31,9 +31,10 @@ class Database:
 
     async def create_tables(self) -> None:
         from models.base import Base
+        from models.support_db import SupportTicketRecord
         from models.user_db import UserRecord
 
-        _ = UserRecord
+        _ = UserRecord, SupportTicketRecord
 
         async with self.engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
