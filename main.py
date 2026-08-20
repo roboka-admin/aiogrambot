@@ -10,6 +10,7 @@ from handlers.edit_profile import router as edit_profile_router
 from handlers.profile import router as profile_router
 from handlers.register import router as register_router
 from handlers.start import router as start_router
+from handlers.support import router as support_router
 from middlewares.logging import LoggingMiddleware
 from middlewares.services import ServicesMiddleware
 from middlewares.user import UserMiddleware
@@ -38,6 +39,7 @@ async def main() -> None:
     dp.include_router(start_router)
     dp.include_router(register_router)
     dp.include_router(profile_router)
+    dp.include_router(support_router)
     dp.include_router(edit_profile_router)
     dp.include_router(admin_router)
 
