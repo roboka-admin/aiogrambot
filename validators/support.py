@@ -4,7 +4,7 @@ from aiogram.enums import ContentType
 from aiogram.types import Message
 
 
-MAX_SUPPORT_TEXT_LENGTH: Final[int] = 2000
+MAX_SUPPORT_TEXT_LENGTH: Final[int] = 1800
 
 SUPPORTED_CONTENT_TYPES: Final[frozenset[ContentType]] = frozenset(
     {
