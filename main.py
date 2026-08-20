@@ -31,7 +31,7 @@ async def main() -> None:
 
     dp.update.middleware(LoggingMiddleware())
     dp.update.middleware(
-        ServicesMiddleware(database=database, bot=bot)
+        ServicesMiddleware(database=database)
     )
     dp.update.middleware(UserMiddleware())
 
