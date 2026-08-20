@@ -6,8 +6,8 @@ class AdminSupportListCallback(CallbackData, prefix="admin_support_list"):
     page: int
 
 
-class AdminSupportTicketCallback(CallbackData, prefix="admin_support_ticket"):
-    ticket_id: int
+class AdminSupportUserCallback(CallbackData, prefix="admin_support_user"):
+    telegram_id: int
     status: str
     page: int
 
