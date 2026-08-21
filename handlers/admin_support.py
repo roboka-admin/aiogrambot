@@ -7,10 +7,21 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from callbacks.admin_support import AdminSupportActionCallback, AdminSupportBackCallback, AdminSupportListCallback, AdminSupportUserCallback
+from callbacks.admin_support import (
+    AdminSupportActionCallback,
+    AdminSupportBackCallback,
+    AdminSupportListCallback,
+    AdminSupportTicketCallback,
+    AdminSupportUserCallback,
+)
 from exceptions.user import UserNotFoundError
 from filters.admin import AdminFilter
-from keyboards.admin_support import support_overview_keyboard, support_user_messages_keyboard, support_users_keyboard
+from keyboards.admin_support import (
+    support_overview_keyboard,
+    support_ticket_detail_keyboard,
+    support_user_messages_keyboard,
+    support_users_keyboard,
+)
 from models.support import SupportStatus, SupportTicket, SupportUserSummary
 from services.support import SupportService
 from services.user import UserService
@@ -52,6 +63,44 @@ async def support_user_messages_handler(callback: CallbackQuery, callback_data: 
         support_service=support_service,
         user_service=user_service,
     )
+    await callback.answer()
+
+
+@router.callback_query(AdminSupportTicketCallback.filter())
+async def support_ticket_detail_handler(
+    callback: CallbackQuery,
+    callback_data: AdminSupportTicketCallback,
+    support_service: SupportService,
+    bot: Bot,
+) -> None:
+    status = SupportStatus(callback_data.status)
+    ticket = await support_service.get_ticket(callback_data.ticket_id)
+
+    if (
+        ticket is None
+        or ticket.user_telegram_id != callback_data.telegram_id
+        or ticket.status is not status
+    ):
+        await callback.answer("❌ این تیکت در دسترس نیست.", show_alert=True)
+        return
+
+    detail_message = await callback.message.answer(
+        f"🎫 جزئیات تیکت #{ticket.id}\n\n"
+        f"نوع پیام: <code>{escape(_deserialize_message(ticket.message).get('content_type', 'unknown'))}</code>\n"
+        f"کاربر: <code>{ticket.user_telegram_id}</code>",
+        parse_mode="HTML",
+        reply_markup=support_ticket_detail_keyboard(
+            telegram_id=callback_data.telegram_id,
+            status=status,
+            page=callback_data.page,
+        ),
+    )
+
+    try:
+        await _send_ticket_content(bot=bot, chat_id=callback.message.chat.id, ticket=ticket)
+    except TelegramAPIError:
+        await detail_message.answer("❌ نمایش محتوای این تیکت ممکن نیست.")
+
     await callback.answer()
 
 
@@ -133,13 +182,20 @@ async def _show_user_conversation(*, message: Message, telegram_id: int, status:
         user_text = f'<a href="tg://user?id={telegram_id}">{user_name}</a>'
     except UserNotFoundError:
         user_text = "کاربر پیدا نشد"
-    messages = "\n\n".join(_ticket_text(ticket) for ticket in tickets) or "پیامی وجود ندارد."
-    if len(messages) > 3500:
-        messages = f"{messages[:3500]}\n\n… پیام‌های بیشتر وجود دارد."
+
     status_text = "🟢 باز" if status is SupportStatus.OPEN else "⚪ بسته"
     await message.edit_text(
-        f"👤 کاربر: {user_text}\n🆔 <code>{telegram_id}</code>\n📌 وضعیت گفتگو: {status_text}\n📩 تعداد پیام‌ها: {len(tickets)}\n\n{messages}",
-        reply_markup=support_user_messages_keyboard(telegram_id=telegram_id, status=status, page=page),
+        f"👤 کاربر: {user_text}\n"
+        f"🆔 <code>{telegram_id}</code>\n"
+        f"📌 وضعیت گفتگو: {status_text}\n"
+        f"📩 تعداد پیام‌ها: {len(tickets)}\n\n"
+        "برای مشاهده محتوای هر پیام، شماره تیکت را انتخاب کنید.",
+        reply_markup=support_user_messages_keyboard(
+            telegram_id=telegram_id,
+            status=status,
+            page=page,
+            tickets=tickets,
+        ),
         parse_mode="HTML",
     )
 
@@ -179,13 +235,33 @@ def _support_users_keyboard_with_names(users: list[SupportUserSummary], names: d
     return keyboard
 
 
-def _ticket_text(ticket: SupportTicket) -> str:
+async def _send_ticket_content(*, bot: Bot, chat_id: int, ticket: SupportTicket) -> None:
     payload = _deserialize_message(ticket.message)
-    content_type = escape(payload.get("content_type", "unknown"))
-    text = payload.get("text") or payload.get("caption") or "بدون متن"
-    if len(text) > 800:
-        text = f"{text[:800]}…"
-    return f"🎫 <b>#{ticket.id}</b> | <code>{content_type}</code>\n{escape(text)}"
+    content_type = payload["content_type"]
+    text = payload.get("text") or ""
+    caption = payload.get("caption") or None
+    file_id = payload.get("file_id")
+
+    if content_type == "text":
+        await bot.send_message(chat_id, text or "بدون متن")
+    elif content_type == "photo" and file_id:
+        await bot.send_photo(chat_id, file_id, caption=caption)
+    elif content_type == "video" and file_id:
+        await bot.send_video(chat_id, file_id, caption=caption)
+    elif content_type == "document" and file_id:
+        await bot.send_document(chat_id, file_id, caption=caption)
+    elif content_type == "audio" and file_id:
+        await bot.send_audio(chat_id, file_id, caption=caption)
+    elif content_type == "voice" and file_id:
+        await bot.send_voice(chat_id, file_id, caption=caption)
+    elif content_type == "sticker" and file_id:
+        await bot.send_sticker(chat_id, file_id)
+    elif content_type == "animation" and file_id:
+        await bot.send_animation(chat_id, file_id, caption=caption)
+    elif content_type == "video_note" and file_id:
+        await bot.send_video_note(chat_id, file_id)
+    else:
+        raise ValueError("Unsupported or incomplete support ticket payload")
 
 
 def _deserialize_message(message: str) -> dict[str, str]:
@@ -195,4 +271,9 @@ def _deserialize_message(message: str) -> dict[str, str]:
         return {"content_type": "text", "text": message}
     if not isinstance(payload, dict):
         return {"content_type": "unknown", "text": message}
-    return {"content_type": str(payload.get("content_type") or "unknown"), "text": str(payload.get("text") or ""), "caption": str(payload.get("caption") or "")}
+    return {
+        "content_type": str(payload.get("content_type") or "unknown"),
+        "text": str(payload.get("text") or ""),
+        "caption": str(payload.get("caption") or ""),
+        "file_id": str(payload.get("file_id") or ""),
+    }
