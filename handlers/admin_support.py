@@ -18,7 +18,6 @@ from exceptions.user import UserNotFoundError
 from filters.admin import AdminFilter
 from keyboards.admin_support import (
     support_overview_keyboard,
-    support_ticket_detail_keyboard,
     support_user_messages_keyboard,
     support_users_keyboard,
 )
@@ -84,22 +83,14 @@ async def support_ticket_detail_handler(
         await callback.answer("❌ این تیکت در دسترس نیست.", show_alert=True)
         return
 
-    detail_message = await callback.message.answer(
-        f"🎫 جزئیات تیکت #{ticket.id}\n\n"
-        f"نوع پیام: <code>{escape(_deserialize_message(ticket.message).get('content_type', 'unknown'))}</code>\n"
-        f"کاربر: <code>{ticket.user_telegram_id}</code>",
-        parse_mode="HTML",
-        reply_markup=support_ticket_detail_keyboard(
-            telegram_id=callback_data.telegram_id,
-            status=status,
-            page=callback_data.page,
-        ),
-    )
-
     try:
-        await _send_ticket_content(bot=bot, chat_id=callback.message.chat.id, ticket=ticket)
+        await _send_ticket_content(
+            bot=bot,
+            chat_id=callback.message.chat.id,
+            ticket=ticket,
+        )
     except (TelegramAPIError, ValueError):
-        await detail_message.answer("❌ نمایش محتوای این تیکت ممکن نیست.")
+        await callback.message.answer("❌ نمایش محتوای این تیکت ممکن نیست.")
 
     await callback.answer()
 
