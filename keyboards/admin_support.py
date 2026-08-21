@@ -83,13 +83,14 @@ def support_user_messages_keyboard(*, telegram_id: int, status: SupportStatus, p
     return builder.as_markup()
 
 
-def support_ticket_detail_keyboard(*, telegram_id: int, status: SupportStatus, page: int) -> InlineKeyboardMarkup:
+def support_ticket_reply_keyboard(*, telegram_id: int, status: SupportStatus, page: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="⬅️ بازگشت به لیست تیکت‌ها",
-                    callback_data=AdminSupportUserCallback(
+                    text="✉️ پاسخ",
+                    callback_data=AdminSupportActionCallback(
+                        action="reply",
                         telegram_id=telegram_id,
                         status=status.value,
                         page=page,
