@@ -18,6 +18,7 @@ from exceptions.user import UserNotFoundError
 from filters.admin import AdminFilter
 from keyboards.admin_support import (
     support_overview_keyboard,
+    support_ticket_reply_keyboard,
     support_user_messages_keyboard,
     support_users_keyboard,
 )
@@ -88,6 +89,11 @@ async def support_ticket_detail_handler(
             bot=bot,
             chat_id=callback.message.chat.id,
             ticket=ticket,
+            reply_markup=support_ticket_reply_keyboard(
+                telegram_id=callback_data.telegram_id,
+                status=status,
+                page=callback_data.page,
+            ),
         )
     except (TelegramAPIError, ValueError):
         await callback.message.answer("❌ نمایش محتوای این تیکت ممکن نیست.")
@@ -226,7 +232,7 @@ def _support_users_keyboard_with_names(users: list[SupportUserSummary], names: d
     return keyboard
 
 
-async def _send_ticket_content(*, bot: Bot, chat_id: int, ticket: SupportTicket) -> None:
+async def _send_ticket_content(*, bot: Bot, chat_id: int, ticket: SupportTicket, reply_markup) -> None:
     payload = _deserialize_message(ticket.message)
     content_type = payload["content_type"]
     text = payload.get("text") or ""
@@ -234,23 +240,23 @@ async def _send_ticket_content(*, bot: Bot, chat_id: int, ticket: SupportTicket)
     file_id = payload.get("file_id")
 
     if content_type == "text":
-        await bot.send_message(chat_id, text or "بدون متن")
+        await bot.send_message(chat_id, text or "بدون متن", reply_markup=reply_markup)
     elif content_type == "photo" and file_id:
-        await bot.send_photo(chat_id, file_id, caption=caption)
+        await bot.send_photo(chat_id, file_id, caption=caption, reply_markup=reply_markup)
     elif content_type == "video" and file_id:
-        await bot.send_video(chat_id, file_id, caption=caption)
+        await bot.send_video(chat_id, file_id, caption=caption, reply_markup=reply_markup)
     elif content_type == "document" and file_id:
-        await bot.send_document(chat_id, file_id, caption=caption)
+        await bot.send_document(chat_id, file_id, caption=caption, reply_markup=reply_markup)
     elif content_type == "audio" and file_id:
-        await bot.send_audio(chat_id, file_id, caption=caption)
+        await bot.send_audio(chat_id, file_id, caption=caption, reply_markup=reply_markup)
     elif content_type == "voice" and file_id:
-        await bot.send_voice(chat_id, file_id, caption=caption)
+        await bot.send_voice(chat_id, file_id, caption=caption, reply_markup=reply_markup)
     elif content_type == "sticker" and file_id:
-        await bot.send_sticker(chat_id, file_id)
+        await bot.send_sticker(chat_id, file_id, reply_markup=reply_markup)
     elif content_type == "animation" and file_id:
-        await bot.send_animation(chat_id, file_id, caption=caption)
+        await bot.send_animation(chat_id, file_id, caption=caption, reply_markup=reply_markup)
     elif content_type == "video_note" and file_id:
-        await bot.send_video_note(chat_id, file_id)
+        await bot.send_video_note(chat_id, file_id, reply_markup=reply_markup)
     else:
         raise ValueError("Unsupported or incomplete support ticket payload")
 
