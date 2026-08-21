@@ -98,7 +98,7 @@ async def support_ticket_detail_handler(
 
     try:
         await _send_ticket_content(bot=bot, chat_id=callback.message.chat.id, ticket=ticket)
-    except TelegramAPIError:
+    except (TelegramAPIError, ValueError):
         await detail_message.answer("❌ نمایش محتوای این تیکت ممکن نیست.")
 
     await callback.answer()
