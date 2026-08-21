@@ -1,8 +1,14 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from callbacks.admin_support import AdminSupportActionCallback, AdminSupportBackCallback, AdminSupportListCallback, AdminSupportUserCallback
-from models.support import SupportStatus, SupportUserSummary
+from callbacks.admin_support import (
+    AdminSupportActionCallback,
+    AdminSupportBackCallback,
+    AdminSupportListCallback,
+    AdminSupportTicketCallback,
+    AdminSupportUserCallback,
+)
+from models.support import SupportStatus, SupportTicket, SupportUserSummary
 
 
 def support_overview_keyboard(*, open_count: int, closed_count: int) -> InlineKeyboardMarkup:
@@ -25,13 +31,70 @@ def support_users_keyboard(*, users: list[SupportUserSummary], status: SupportSt
     return builder.as_markup()
 
 
-def support_user_messages_keyboard(*, telegram_id: int, status: SupportStatus, page: int) -> InlineKeyboardMarkup:
+def support_user_messages_keyboard(*, telegram_id: int, status: SupportStatus, page: int, tickets: list[SupportTicket]) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+
+    for ticket in tickets:
+        if ticket.id is None:
+            continue
+        builder.button(
+            text=f"🎫 #{ticket.id}",
+            callback_data=AdminSupportTicketCallback(
+                ticket_id=ticket.id,
+                telegram_id=telegram_id,
+                status=status.value,
+                page=page,
+            ).pack(),
+        )
+
+    builder.adjust(3)
+
     action = "reopen" if status is SupportStatus.CLOSED else "close"
     action_text = "🟢 باز کردن گفتگو" if status is SupportStatus.CLOSED else "🔒 بستن گفتگو"
+
+    builder.row(
+        InlineKeyboardButton(
+            text="✉️ پاسخ به کاربر",
+            callback_data=AdminSupportActionCallback(
+                action="reply",
+                telegram_id=telegram_id,
+                status=status.value,
+                page=page,
+            ).pack(),
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text=action_text,
+            callback_data=AdminSupportActionCallback(
+                action=action,
+                telegram_id=telegram_id,
+                status=status.value,
+                page=page,
+            ).pack(),
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="⬅️ بازگشت به کاربران",
+            callback_data=AdminSupportListCallback(status=status.value, page=page).pack(),
+        )
+    )
+    return builder.as_markup()
+
+
+def support_ticket_detail_keyboard(*, telegram_id: int, status: SupportStatus, page: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="✉️ پاسخ به کاربر", callback_data=AdminSupportActionCallback(action="reply", telegram_id=telegram_id, status=status.value, page=page).pack())],
-            [InlineKeyboardButton(text=action_text, callback_data=AdminSupportActionCallback(action=action, telegram_id=telegram_id, status=status.value, page=page).pack())],
-            [InlineKeyboardButton(text="⬅️ بازگشت به کاربران", callback_data=AdminSupportListCallback(status=status.value, page=page).pack())],
+            [
+                InlineKeyboardButton(
+                    text="⬅️ بازگشت به لیست تیکت‌ها",
+                    callback_data=AdminSupportUserCallback(
+                        telegram_id=telegram_id,
+                        status=status.value,
+                        page=page,
+                    ).pack(),
+                )
+            ]
         ]
     )
