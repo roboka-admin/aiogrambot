@@ -39,3 +39,9 @@ class SupportService:
 
     async def reopen_user_conversation(self, telegram_id: int) -> int:
         return await self._support_repository.update_user_status(telegram_id, SupportStatus.OPEN)
+
+    async def delete_closed_tickets(self) -> int:
+        return await self._support_repository.delete_by_status(SupportStatus.CLOSED)
+
+    async def delete_all_tickets(self) -> int:
+        return await self._support_repository.delete_all()

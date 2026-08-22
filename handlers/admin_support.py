@@ -10,6 +10,9 @@ from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 from callbacks.admin_support import (
     AdminSupportActionCallback,
     AdminSupportBackCallback,
+    AdminSupportCleanupCallback,
+    AdminSupportCleanupConfirmCallback,
+    AdminSupportCleanupCancelCallback,
     AdminSupportListCallback,
     AdminSupportTicketCallback,
     AdminSupportUserCallback,
@@ -18,6 +21,7 @@ from exceptions.user import UserNotFoundError
 from filters.admin import AdminFilter
 from keyboards.admin_support import (
     admin_support_reply_cancel_keyboard,
+    support_cleanup_confirm_keyboard,
     support_overview_keyboard,
     support_ticket_reply_keyboard,
     support_user_messages_keyboard,
@@ -179,6 +183,57 @@ async def change_support_conversation_status_handler(callback: CallbackQuery, ca
 async def support_back_handler(callback: CallbackQuery, support_service: SupportService) -> None:
     await _show_support_overview(message=callback.message, support_service=support_service, edit=True)
     await callback.answer()
+
+
+@router.callback_query(AdminSupportCleanupCallback.filter())
+async def support_cleanup_start_handler(
+    callback: CallbackQuery,
+    callback_data: AdminSupportCleanupCallback,
+    state: FSMContext,
+) -> None:
+    action = callback_data.action
+    if action == "delete_closed":
+        text = "🗑 پاک‌سازی تیکت‌های بسته\n\nآیا مطمئن هستید که می‌خواهید همه تیکت‌های بسته را حذف کنید؟"
+    else:
+        text = "🗑 پاک‌سازی همه تیکت‌ها\n\nآیا مطمئن هستید که می‌خواهید همه تیکت‌ها را حذف کنید؟"
+
+    await state.set_state(AdminSupportStates.waiting_cleanup_confirmation)
+    await state.update_data(cleanup_action=action)
+    await callback.message.edit_text(text, reply_markup=support_cleanup_confirm_keyboard(action=action))
+    await callback.answer()
+
+
+@router.callback_query(AdminSupportCleanupConfirmCallback.filter(), AdminSupportStates.waiting_cleanup_confirmation)
+async def support_cleanup_confirm_handler(
+    callback: CallbackQuery,
+    callback_data: AdminSupportCleanupConfirmCallback,
+    state: FSMContext,
+    support_service: SupportService,
+) -> None:
+    data = await state.get_data()
+    action = data.get("cleanup_action", callback_data.action)
+
+    if action == "delete_closed":
+        deleted_count = await support_service.delete_closed_tickets()
+        result_text = f"✅ {deleted_count} تیکت بسته پاک‌سازی شد."
+    else:
+        deleted_count = await support_service.delete_all_tickets()
+        result_text = f"✅ {deleted_count} تیکت پاک‌سازی شد."
+
+    await state.clear()
+    await _show_support_overview(message=callback.message, support_service=support_service, edit=True)
+    await callback.answer(result_text, show_alert=True)
+
+
+@router.callback_query(AdminSupportCleanupCancelCallback.filter(), AdminSupportStates.waiting_cleanup_confirmation)
+async def support_cleanup_cancel_handler(
+    callback: CallbackQuery,
+    state: FSMContext,
+    support_service: SupportService,
+) -> None:
+    await state.clear()
+    await _show_support_overview(message=callback.message, support_service=support_service, edit=True)
+    await callback.answer("پاک‌سازی لغو شد.")
 
 
 async def _show_user_conversation(*, message: Message, telegram_id: int, status: SupportStatus, page: int, support_service: SupportService, user_service: UserService) -> None:

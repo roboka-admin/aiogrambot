@@ -17,7 +17,21 @@ from models.support import SupportStatus, SupportTicket, SupportUserSummary
 
 
 def support_overview_keyboard(*, open_count: int, closed_count: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f"🟢 باز ({open_count})", callback_data=AdminSupportListCallback(status=SupportStatus.OPEN.value, page=0).pack()), InlineKeyboardButton(text=f"⚪ بسته ({closed_count})", callback_data=AdminSupportListCallback(status=SupportStatus.CLOSED.value, page=0).pack())]])
+    from callbacks.admin_support import AdminSupportCleanupCallback
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=f"🟢 باز ({open_count})", callback_data=AdminSupportListCallback(status=SupportStatus.OPEN.value, page=0).pack()),
+                InlineKeyboardButton(text=f"⚪ بسته ({closed_count})", callback_data=AdminSupportListCallback(status=SupportStatus.CLOSED.value, page=0).pack()),
+            ],
+            [
+                InlineKeyboardButton(text="🗑 پاک‌سازی تیکت‌های بسته", callback_data=AdminSupportCleanupCallback(action="delete_closed").pack()),
+            ],
+            [
+                InlineKeyboardButton(text="🗑 پاک‌سازی همه تیکت‌ها", callback_data=AdminSupportCleanupCallback(action="delete_all").pack()),
+            ],
+        ]
+    )
 
 
 def support_users_keyboard(*, users: list[SupportUserSummary], status: SupportStatus, page: int, total_pages: int) -> InlineKeyboardMarkup:
@@ -128,5 +142,17 @@ def support_notification_reply_keyboard(*, telegram_id: int) -> InlineKeyboardMa
                     ).pack(),
                 )
             ]
+        ]
+    )
+
+
+def support_cleanup_confirm_keyboard(*, action: str) -> InlineKeyboardMarkup:
+    from callbacks.admin_support import AdminSupportCleanupConfirmCallback, AdminSupportCleanupCancelCallback
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ تأیید", callback_data=AdminSupportCleanupConfirmCallback(action=action).pack()),
+                InlineKeyboardButton(text="❌ انصراف", callback_data=AdminSupportCleanupCancelCallback().pack()),
+            ],
         ]
     )

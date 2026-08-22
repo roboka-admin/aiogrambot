@@ -1,4 +1,4 @@
-from sqlalchemy import func, select, update as sql_update
+from sqlalchemy import delete as sql_delete, func, select, update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.support import SupportStatus, SupportTicket, SupportUserSummary
@@ -61,6 +61,18 @@ class SupportRepository(ISupportRepository):
             .where(SupportTicketRecord.user_telegram_id == telegram_id)
             .values(status=status.value)
         )
+        await self._session.flush()
+        return result.rowcount or 0
+
+    async def delete_by_status(self, status: SupportStatus) -> int:
+        result = await self._session.execute(
+            sql_delete(SupportTicketRecord).where(SupportTicketRecord.status == status.value)
+        )
+        await self._session.flush()
+        return result.rowcount or 0
+
+    async def delete_all(self) -> int:
+        result = await self._session.execute(sql_delete(SupportTicketRecord))
         await self._session.flush()
         return result.rowcount or 0
 
