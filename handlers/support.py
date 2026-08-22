@@ -7,6 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from config import ADMIN_IDS
+from keyboards.admin_support import support_notification_reply_keyboard
 from keyboards.menu import main_menu, support_menu
 from middlewares.registration import RegistrationRequiredMiddleware
 from models.user import User
@@ -133,7 +134,13 @@ async def _notify_admins(*, bot: Bot, message: Message, ticket_id: int | None, u
     )
     for admin_id in ADMIN_IDS:
         try:
-            await bot.send_message(admin_id, header)
+            await bot.send_message(
+                admin_id,
+                header,
+                reply_markup=support_notification_reply_keyboard(
+                    telegram_id=user.telegram_id,
+                ),
+            )
             await message.copy_to(chat_id=admin_id)
         except TelegramAPIError:
             logger.warning("Could not deliver support ticket %s to admin %s", ticket_id, admin_id)
