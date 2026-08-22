@@ -1,4 +1,11 @@
+from enum import Enum
+
 from aiogram.filters.callback_data import CallbackData
+
+
+class CleanupAction(str, Enum):
+    DELETE_CLOSED = "delete_closed"
+    DELETE_ALL = "delete_all"
 
 
 class AdminSupportListCallback(CallbackData, prefix="admin_support_list"):
@@ -30,12 +37,20 @@ class AdminSupportBackCallback(CallbackData, prefix="admin_support_back"):
     pass
 
 
+class AdminSupportSettingsCallback(CallbackData, prefix="admin_support_settings"):
+    pass
+
+
+class AdminSupportSettingsBackCallback(CallbackData, prefix="admin_support_settings_back"):
+    pass
+
+
 class AdminSupportCleanupCallback(CallbackData, prefix="admin_support_cleanup"):
-    action: str
+    action: CleanupAction
 
 
 class AdminSupportCleanupConfirmCallback(CallbackData, prefix="admin_support_cleanup_confirm"):
-    action: str
+    action: CleanupAction
 
 
 class AdminSupportCleanupCancelCallback(CallbackData, prefix="admin_support_cleanup_cancel"):
