@@ -123,9 +123,7 @@ async def broadcast_confirm_handler(
         await callback.message.edit_text("❌ هیچ کاربر فعالی برای ارسال پیام وجود ندارد.")
         return
 
-    await callback.message.edit_text(
-        _progress_text(0, recipient_count, 0, 0),
-    )
+    await callback.message.edit_text(_progress_text(0, recipient_count, 0, 0))
 
     last_progress: tuple[int, int, int, int] | None = None
 
@@ -141,7 +139,7 @@ async def broadcast_confirm_handler(
             return
         last_progress = current
         try:
-            await callback.message.edit_text(*[_progress_text(*current)])
+            await callback.message.edit_text(_progress_text(*current))
         except TelegramAPIError as exc:
             logger.warning("Failed to update broadcast progress: %s", exc)
 
