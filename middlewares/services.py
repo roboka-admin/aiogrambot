@@ -15,9 +15,8 @@ from services.user import UserService
 class ServicesMiddleware(BaseMiddleware):
     """Create request-scoped repository and services."""
 
-    def __init__(self, *, database: Database, bot: Bot) -> None:
+    def __init__(self, *, database: Database) -> None:
         self._database = database
-        self._bot = bot
 
     async def __call__(
         self,
@@ -44,7 +43,7 @@ class ServicesMiddleware(BaseMiddleware):
                 )
                 broadcast_service = BroadcastService(
                     user_repository=user_repository,
-                    bot=self._bot,
+                    bot=data["bot"],
                 )
 
                 data["register_service"] = register_service
