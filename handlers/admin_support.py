@@ -5,7 +5,7 @@ from math import ceil
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 
 from callbacks.admin_support import (
     AdminSupportActionCallback,
@@ -17,6 +17,7 @@ from callbacks.admin_support import (
 from exceptions.user import UserNotFoundError
 from filters.admin import AdminFilter
 from keyboards.admin_support import (
+    admin_support_reply_cancel_keyboard,
     support_overview_keyboard,
     support_ticket_reply_keyboard,
     support_user_messages_keyboard,
@@ -112,15 +113,18 @@ async def start_support_reply_handler(callback: CallbackQuery, callback_data: Ad
     await callback.answer()
     await callback.message.answer(
         "✉️ پاسخ خود را برای کاربر ارسال کنید.\n"
-        "می‌توانید متن، عکس، ویدیو، فایل، صوت، ویس، استیکر، گیف یا ویدیو مسیج ارسال کنید.\n\n"
-        "برای لغو، دکمه «❌ لغو» را ارسال کنید."
+        "می‌توانید متن، عکس، ویدیو، فایل، صوت، ویس، استیکر، گیف یا ویدیو مسیج ارسال کنید.",
+        reply_markup=admin_support_reply_cancel_keyboard(),
     )
 
 
 @router.message(AdminSupportStates.waiting_reply, F.text == "❌ لغو")
 async def cancel_support_reply_handler(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await message.answer("ارسال پاسخ لغو شد.")
+    await message.answer(
+        "ارسال پاسخ لغو شد.",
+        reply_markup=ReplyKeyboardRemove(),
+    )
 
 
 @router.message(AdminSupportStates.waiting_reply)
@@ -129,7 +133,10 @@ async def send_support_reply_handler(message: Message, state: FSMContext, bot: B
     telegram_id = data.get("telegram_id")
     if not isinstance(telegram_id, int):
         await state.clear()
-        await message.answer("❌ اطلاعات گفتگو نامعتبر است.")
+        await message.answer(
+            "❌ اطلاعات گفتگو نامعتبر است.",
+            reply_markup=ReplyKeyboardRemove(),
+        )
         return
 
     try:
@@ -140,7 +147,10 @@ async def send_support_reply_handler(message: Message, state: FSMContext, bot: B
         return
 
     await state.clear()
-    await message.answer("✅ پاسخ با موفقیت برای کاربر ارسال شد.")
+    await message.answer(
+        "✅ پاسخ با موفقیت برای کاربر ارسال شد.",
+        reply_markup=ReplyKeyboardRemove(),
+    )
 
 
 @router.callback_query(AdminSupportActionCallback.filter(F.action.in_({"close", "reopen"})))
