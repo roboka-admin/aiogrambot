@@ -1,4 +1,9 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+)
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from callbacks.admin_support import (
@@ -94,6 +99,32 @@ def support_ticket_reply_keyboard(*, telegram_id: int, status: SupportStatus, pa
                         telegram_id=telegram_id,
                         status=status.value,
                         page=page,
+                    ).pack(),
+                )
+            ]
+        ]
+    )
+
+
+def admin_support_reply_cancel_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="❌ لغو")]],
+        resize_keyboard=True,
+        one_time_keyboard=False,
+    )
+
+
+def support_notification_reply_keyboard(*, telegram_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✉️ پاسخ",
+                    callback_data=AdminSupportActionCallback(
+                        action="reply",
+                        telegram_id=telegram_id,
+                        status=SupportStatus.OPEN.value,
+                        page=0,
                     ).pack(),
                 )
             ]
