@@ -86,3 +86,6 @@ class UserService:
         updated_user = await self._user_repository.update(user)
         assert updated_user is not None
         return updated_user
+
+    async def get_active_telegram_ids(self) -> list[int]:
+        return await self._user_repository.list_active_telegram_ids()

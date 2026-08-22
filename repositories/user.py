@@ -82,6 +82,14 @@ class UserRepository(IUserRepository):
         )
         return result.scalar_one()
 
+    async def list_active_telegram_ids(self) -> list[int]:
+        result = await self._session.execute(
+            select(UserRecord.telegram_id).where(
+                UserRecord.status == UserStatus.ACTIVE.value
+            )
+        )
+        return list(result.scalars())
+
     @staticmethod
     def _to_domain(record: UserRecord) -> User:
         return User(

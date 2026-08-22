@@ -29,3 +29,6 @@ class IUserRepository(Protocol):
 
     async def count(self) -> int:
         ...
+
+    async def list_active_telegram_ids(self) -> list[int]:
+        ...
