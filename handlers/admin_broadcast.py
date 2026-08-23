@@ -12,7 +12,7 @@ from callbacks.admin import (
 )
 from filters.admin import AdminFilter
 from keyboards.admin_broadcast import broadcast_cancel_keyboard, broadcast_preview_keyboard
-from services.broadcast import BroadcastService
+from services.broadcast import BroadcastProgress, BroadcastService
 from states.admin import AdminBroadcastStates
 from validators.broadcast import validate_broadcast_message
 
@@ -34,13 +34,16 @@ async def broadcast_start_handler(
     state: FSMContext,
     broadcast_service: BroadcastService,
 ) -> None:
-    await state.set_state(AdminBroadcastStates.waiting_message)
     recipient_count = await broadcast_service.count_recipients()
+
+    await state.set_state(AdminBroadcastStates.waiting_message)
     await state.update_data(**{RECIPIENT_COUNT_KEY: recipient_count})
 
     await message.answer(
-        "📢 پیام همگانی را ارسال کنید.\n"
-        "می‌توانید متن، عکس، ویدیو، فایل، صوت، ویس، استیکر، گیف یا ویدیو مسیج ارسال کنید.",
+        "📢 <b>ارسال همگانی</b>\n\n"
+        f"👥 گیرندگان فعلی: <b>{recipient_count}</b> کاربر فعال\n\n"
+        "پیامی که می‌خواهید برای کاربران ارسال شود را بفرستید.\n"
+        "پشتیبانی می‌شود: متن، عکس، ویدیو، فایل، صوت، ویس، استیکر، گیف و ویدیو مسیج.",
         reply_markup=broadcast_cancel_keyboard(),
     )
 
@@ -55,7 +58,7 @@ async def broadcast_cancel_text_handler(message: Message, state: FSMContext) -> 
 async def broadcast_message_handler(message: Message, state: FSMContext) -> None:
     if not validate_broadcast_message(message):
         await message.answer(
-            "❌ این نوع پیام برای ارسال همگانی پشتیبانی نمی‌شود.\n"
+            "❌ این نوع پیام برای ارسال همگانی پشتیبانی نمی‌شود.\n\n"
             "یک متن، عکس، ویدیو، فایل، صوت، ویس، استیکر، گیف یا ویدیو مسیج ارسال کنید."
         )
         return
@@ -71,13 +74,12 @@ async def broadcast_message_handler(message: Message, state: FSMContext) -> None
     recipient_count = data.get(RECIPIENT_COUNT_KEY, 0)
     await state.set_state(AdminBroadcastStates.waiting_confirmation)
 
-    await message.copy_to(
-        chat_id=message.chat.id,
-        reply_markup=ReplyKeyboardRemove(),
-    )
+    await message.answer("👀 <b>پیش‌نمایش پیام:</b>", reply_markup=ReplyKeyboardRemove())
+    await message.copy_to(chat_id=message.chat.id)
     await message.answer(
-        f"📊 تعداد دریافت‌کنندگان: {recipient_count} کاربر\n"
-        "آیا از ارسال این پیام مطمئن هستید؟",
+        "\n📊 <b>آماده ارسال</b>\n"
+        f"👥 تعداد گیرندگان: <b>{recipient_count}</b> کاربر فعال\n\n"
+        "پس از شروع، پیام برای کاربران فعال ارسال می‌شود.",
         reply_markup=broadcast_preview_keyboard(),
     )
 
@@ -85,9 +87,11 @@ async def broadcast_message_handler(message: Message, state: FSMContext) -> None
 @router.callback_query(AdminBroadcastEditCallback.filter(), AdminBroadcastStates.waiting_confirmation)
 async def broadcast_edit_handler(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminBroadcastStates.waiting_message)
-    await callback.message.edit_text(
-        "✏️ پیام جدید را ارسال کنید.\n"
-        "می‌توانید متن، عکس، ویدیو، فایل، صوت، ویس، استیکر، گیف یا ویدیو مسیج ارسال کنید.",
+    await callback.message.edit_text("✏️ پیام قبلی کنار گذاشته شد.")
+    await callback.message.answer(
+        "✏️ <b>پیام جدید را ارسال کنید.</b>\n\n"
+        "در هر زمان می‌توانید با دکمه «❌ لغو» عملیات را متوقف کنید.",
+        reply_markup=broadcast_cancel_keyboard(),
     )
     await callback.answer()
 
@@ -96,7 +100,7 @@ async def broadcast_edit_handler(callback: CallbackQuery, state: FSMContext) -> 
 async def broadcast_cancel_callback_handler(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await callback.message.edit_text("❌ ارسال همگانی لغو شد.")
-    await callback.answer()
+    await callback.answer("لغو شد")
 
 
 @router.callback_query(AdminBroadcastStartCallback.filter(), AdminBroadcastStates.waiting_confirmation)
@@ -123,23 +127,20 @@ async def broadcast_confirm_handler(
         await callback.message.edit_text("❌ هیچ کاربر فعالی برای ارسال پیام وجود ندارد.")
         return
 
-    await callback.message.edit_text(_progress_text(0, recipient_count, 0, 0))
+    await callback.message.edit_text(_progress_text(0, recipient_count, 0, 0, 0, None))
 
-    last_progress: tuple[int, int, int, int] | None = None
-
-    async def update_progress(
-        processed: int,
-        total: int,
-        success: int,
-        failed: int,
-    ) -> None:
-        nonlocal last_progress
-        current = (processed, total, success, failed)
-        if current == last_progress:
-            return
-        last_progress = current
+    async def update_progress(progress: BroadcastProgress) -> None:
         try:
-            await callback.message.edit_text(_progress_text(*current))
+            await callback.message.edit_text(
+                _progress_text(
+                    progress.processed,
+                    progress.total,
+                    progress.success,
+                    progress.failed,
+                    progress.percent,
+                    progress.eta_seconds,
+                )
+            )
         except TelegramAPIError as exc:
             logger.warning("Failed to update broadcast progress: %s", exc)
 
@@ -151,18 +152,34 @@ async def broadcast_confirm_handler(
     )
 
     await callback.message.edit_text(
-        "📢 ارسال همگانی پایان یافت\n\n"
-        f"👥 کل کاربران هدف: {result.total}\n"
-        f"✅ ارسال موفق: {result.success}\n"
-        f"❌ ناموفق: {result.failed}\n"
-        f"⏱ مدت زمان: {result.duration_seconds} ثانیه"
+        "✅ <b>ارسال همگانی پایان یافت</b>\n\n"
+        f"👥 کل کاربران هدف: <b>{result.total}</b>\n"
+        f"✅ ارسال موفق: <b>{result.success}</b>\n"
+        f"❌ ناموفق: <b>{result.failed}</b>\n"
+        f"⏱ مدت زمان: <b>{_format_duration(result.duration_seconds)}</b>"
     )
 
 
-def _progress_text(processed: int, total: int, success: int, failed: int) -> str:
+def _progress_text(
+    processed: int,
+    total: int,
+    success: int,
+    failed: int,
+    percent: int,
+    eta_seconds: int | None,
+) -> str:
+    eta = "در حال محاسبه..." if eta_seconds is None else _format_duration(eta_seconds)
     return (
-        "📢 ارسال همگانی در حال انجام است...\n\n"
-        f"ارسال شده: {processed} / {total}\n"
-        f"موفق: {success}\n"
-        f"ناموفق: {failed}"
+        "📢 <b>ارسال همگانی در حال انجام است</b>\n\n"
+        f"📊 پیشرفت: <b>{percent}%</b> ({processed}/{total})\n"
+        f"✅ موفق: {success}\n"
+        f"❌ ناموفق: {failed}\n"
+        f"⏳ زمان تقریبی باقی‌مانده: {eta}"
     )
+
+
+def _format_duration(seconds: int) -> str:
+    minutes, seconds = divmod(max(seconds, 0), 60)
+    if minutes:
+        return f"{minutes} دقیقه و {seconds} ثانیه"
+    return f"{seconds} ثانیه"
