@@ -17,7 +17,31 @@ from repositories.interfaces.user import IUserRepository
 logger = logging.getLogger(__name__)
 
 _SEND_DELAY_SECONDS = 0.05
-ProgressCallback = Callable[[int, int, int, int], Awaitable[None]]
+_MAX_RETRY_AFTER_ATTEMPTS = 3
+ProgressCallback = Callable[["BroadcastProgress"], Awaitable[None]]
+
+
+@dataclass(slots=True, frozen=True)
+class BroadcastProgress:
+    processed: int
+    total: int
+    success: int
+    failed: int
+    elapsed_seconds: float
+
+    @property
+    def percent(self) -> int:
+        if self.total == 0:
+            return 100
+        return int(self.processed / self.total * 100)
+
+    @property
+    def eta_seconds(self) -> int | None:
+        if self.processed == 0:
+            return None
+        average_per_user = self.elapsed_seconds / self.processed
+        remaining = self.total - self.processed
+        return round(average_per_user * remaining)
 
 
 @dataclass(slots=True, frozen=True)
@@ -46,6 +70,9 @@ class BroadcastService:
         progress_callback: ProgressCallback | None = None,
         progress_interval: int = 10,
     ) -> BroadcastResult:
+        if progress_interval < 1:
+            raise ValueError("progress_interval must be at least 1")
+
         telegram_ids = await self._user_repository.list_active_telegram_ids()
         total = len(telegram_ids)
         success = 0
@@ -73,7 +100,15 @@ class BroadcastService:
             if progress_callback and (
                 processed % progress_interval == 0 or processed == total
             ):
-                await progress_callback(processed, total, success, failed)
+                await progress_callback(
+                    BroadcastProgress(
+                        processed=processed,
+                        total=total,
+                        success=success,
+                        failed=failed,
+                        elapsed_seconds=time.monotonic() - started_at,
+                    )
+                )
 
             if processed < total:
                 await asyncio.sleep(_SEND_DELAY_SECONDS)
@@ -92,7 +127,7 @@ class BroadcastService:
         from_chat_id: int,
         message_id: int,
     ) -> None:
-        while True:
+        for attempt in range(1, _MAX_RETRY_AFTER_ATTEMPTS + 1):
             try:
                 await self._bot.copy_message(
                     chat_id=chat_id,
@@ -101,9 +136,14 @@ class BroadcastService:
                 )
                 return
             except TelegramRetryAfter as exc:
+                if attempt == _MAX_RETRY_AFTER_ATTEMPTS:
+                    raise
+
                 logger.warning(
-                    "Broadcast rate limited for user %s; retrying after %s seconds",
+                    "Broadcast rate limited for user %s; retrying in %s seconds (attempt %s/%s)",
                     chat_id,
                     exc.retry_after,
+                    attempt,
+                    _MAX_RETRY_AFTER_ATTEMPTS,
                 )
                 await asyncio.sleep(exc.retry_after)
