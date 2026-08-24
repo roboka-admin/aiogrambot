@@ -74,10 +74,9 @@ class SpamState:
 
 
 class AntiSpamMiddleware(BaseMiddleware):
-    """Protects one aiogram event type with independent per-user state."""
+    """Protects one observer with independent per-user in-memory state."""
 
-    def __init__(self, *, is_callback: bool) -> None:
-        self._is_callback = is_callback
+    def __init__(self) -> None:
         self._states: dict[int, SpamState] = {}
         self._last_cleanup_at = 0.0
 
