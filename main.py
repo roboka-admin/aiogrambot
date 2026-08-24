@@ -40,8 +40,8 @@ async def main() -> None:
     )
     dp.update.middleware(UserMiddleware())
 
-    dp.message.middleware(AntiSpamMiddleware(is_callback=False))
-    dp.callback_query.middleware(AntiSpamMiddleware(is_callback=True))
+    dp.message.outer_middleware(AntiSpamMiddleware())
+    dp.callback_query.outer_middleware(AntiSpamMiddleware())
 
     dp.include_router(start_router)
     dp.include_router(register_router)
