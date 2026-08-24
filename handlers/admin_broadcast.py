@@ -45,6 +45,7 @@ async def broadcast_start_handler(
         "پیامی که می‌خواهید برای کاربران ارسال شود را بفرستید.\n"
         "پشتیبانی می‌شود: متن، عکس، ویدیو، فایل، صوت، ویس، استیکر، گیف و ویدیو مسیج.",
         reply_markup=broadcast_cancel_keyboard(),
+        parse_mode="HTML",
     )
 
 
@@ -74,13 +75,14 @@ async def broadcast_message_handler(message: Message, state: FSMContext) -> None
     recipient_count = data.get(RECIPIENT_COUNT_KEY, 0)
     await state.set_state(AdminBroadcastStates.waiting_confirmation)
 
-    await message.answer("👀 <b>پیش‌نمایش پیام:</b>", reply_markup=ReplyKeyboardRemove())
+    await message.answer("👀 <b>پیش‌نمایش پیام:</b>", reply_markup=ReplyKeyboardRemove(), parse_mode="HTML")
     await message.copy_to(chat_id=message.chat.id)
     await message.answer(
         "\n📊 <b>آماده ارسال</b>\n"
         f"👥 تعداد گیرندگان: <b>{recipient_count}</b> کاربر فعال\n\n"
         "پس از شروع، پیام برای کاربران فعال ارسال می‌شود.",
         reply_markup=broadcast_preview_keyboard(),
+        parse_mode="HTML",
     )
 
 
@@ -92,6 +94,7 @@ async def broadcast_edit_handler(callback: CallbackQuery, state: FSMContext) -> 
         "✏️ <b>پیام جدید را ارسال کنید.</b>\n\n"
         "در هر زمان می‌توانید با دکمه «❌ لغو» عملیات را متوقف کنید.",
         reply_markup=broadcast_cancel_keyboard(),
+        parse_mode="HTML",
     )
     await callback.answer()
 
@@ -127,7 +130,7 @@ async def broadcast_confirm_handler(
         await callback.message.edit_text("❌ هیچ کاربر فعالی برای ارسال پیام وجود ندارد.")
         return
 
-    await callback.message.edit_text(_progress_text(0, recipient_count, 0, 0, 0, None))
+    await callback.message.edit_text(_progress_text(0, recipient_count, 0, 0, 0, None), parse_mode="HTML")
 
     async def update_progress(progress: BroadcastProgress) -> None:
         try:
@@ -139,7 +142,8 @@ async def broadcast_confirm_handler(
                     progress.failed,
                     progress.percent,
                     progress.eta_seconds,
-                )
+                ),
+                parse_mode="HTML",
             )
         except TelegramAPIError as exc:
             logger.warning("Failed to update broadcast progress: %s", exc)
@@ -156,7 +160,8 @@ async def broadcast_confirm_handler(
         f"👥 کل کاربران هدف: <b>{result.total}</b>\n"
         f"✅ ارسال موفق: <b>{result.success}</b>\n"
         f"❌ ناموفق: <b>{result.failed}</b>\n"
-        f"⏱ مدت زمان: <b>{_format_duration(result.duration_seconds)}</b>"
+        f"⏱ مدت زمان: <b>{_format_duration(result.duration_seconds)}</b>",
+        parse_mode="HTML",
     )
 
 
