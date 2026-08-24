@@ -35,11 +35,13 @@ async def main() -> None:
     await database.create_tables()
 
     dp.update.middleware(LoggingMiddleware())
-    dp.update.middleware(AntiSpamMiddleware())
     dp.update.middleware(
         ServicesMiddleware(database=database)
     )
     dp.update.middleware(UserMiddleware())
+
+    dp.message.middleware(AntiSpamMiddleware(is_callback=False))
+    dp.callback_query.middleware(AntiSpamMiddleware(is_callback=True))
 
     dp.include_router(start_router)
     dp.include_router(register_router)
