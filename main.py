@@ -14,6 +14,7 @@ from handlers.profile import router as profile_router
 from handlers.register import router as register_router
 from handlers.start import router as start_router
 from handlers.support import router as support_router
+from middlewares.anti_spam import AntiSpamMiddleware
 from middlewares.logging import LoggingMiddleware
 from middlewares.services import ServicesMiddleware
 from middlewares.user import UserMiddleware
@@ -34,6 +35,7 @@ async def main() -> None:
     await database.create_tables()
 
     dp.update.middleware(LoggingMiddleware())
+    dp.update.middleware(AntiSpamMiddleware())
     dp.update.middleware(
         ServicesMiddleware(database=database)
     )

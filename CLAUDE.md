@@ -85,3 +85,26 @@ If an architectural decision is unclear, stop and ask before making a significan
 Never delete, overwrite, or significantly restructure project files without explicit justification.
 
 For database migrations, configuration changes, dependency changes, or broad refactors, explain the impact before proceeding.
+
+## Skill Usage Policy
+
+Before starting any task, first check the available project and installed skills.
+
+If one or more skills are relevant to the user's request, you MUST read and follow the relevant skill instructions before performing the task.
+
+Do not ignore a relevant skill simply because you already know how to perform the task.
+
+Skill instructions take priority for their specific domain and must be followed throughout the task.
+
+When multiple skills are relevant:
+
+1. Identify all relevant skills.
+2. Read the instructions for each relevant skill.
+3. Apply them together where they do not conflict.
+4. If instructions conflict, follow the more specific skill for that task.
+
+Do not load or use unrelated skills unnecessarily.
+
+Before completing a task, verify that any relevant skill requirements were followed.
+
+If a relevant skill is available but cannot be accessed or used, explicitly state that limitation instead of silently proceeding as if the skill did not exist.
