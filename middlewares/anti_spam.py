@@ -9,14 +9,17 @@ from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message
 
 from config import ADMIN_IDS
+from services.user import UserService
 
 MAX_UPDATES = 5
 WINDOW_SECONDS = 3.0
 COOLDOWN_STAGES = (3.0, 10.0, 30.0, 120.0)
+MAX_SPAM_VIOLATIONS = 3
 VIOLATION_RESET_SECONDS = 60.0
 MAX_INACTIVE_SECONDS = 300.0
 CLEANUP_INTERVAL_SECONDS = 60.0
 WARNING_MESSAGE = "⚠️ لطفاً کمی آهسته‌تر عمل کنید و چند لحظه صبر کنید."
+BLOCKED_MESSAGE = "🚫 به دلیل ارسال پیام‌های مکرر و اسپم، دسترسی شما به ربات مسدود شد."
 
 
 @dataclass(slots=True)
@@ -55,16 +58,17 @@ class SpamState:
         self.timestamps.append(now)
         return True
 
-    def apply_violation(self, now: float) -> float:
-        self.violation_level = min(
-            self.violation_level + 1,
-            len(COOLDOWN_STAGES),
+    def apply_violation(self, now: float) -> tuple[int, float]:
+        self.violation_level += 1
+        cooldown_index = min(
+            self.violation_level - 1,
+            len(COOLDOWN_STAGES) - 1,
         )
-        duration = COOLDOWN_STAGES[self.violation_level - 1]
+        duration = COOLDOWN_STAGES[cooldown_index]
         self.blocked_until = now + duration
         self.last_activity = now
         self.timestamps.clear()
-        return duration
+        return self.violation_level, duration
 
     def is_expired(self, now: float) -> bool:
         return (
@@ -74,7 +78,7 @@ class SpamState:
 
 
 class AntiSpamMiddleware(BaseMiddleware):
-    """Protects one observer with independent per-user in-memory state."""
+    """Protect one observer with independent per-user in-memory rate limits."""
 
     def __init__(self) -> None:
         self._states: dict[int, SpamState] = {}
@@ -101,6 +105,24 @@ class AntiSpamMiddleware(BaseMiddleware):
         else:
             await event.answer(text)
 
+    async def _notify_blocked(self, event: Message | CallbackQuery) -> None:
+        if isinstance(event, CallbackQuery):
+            await event.answer(BLOCKED_MESSAGE, show_alert=True)
+        else:
+            await event.answer(BLOCKED_MESSAGE)
+
+    async def _block_user(
+        self,
+        *,
+        user_id: int,
+        user_service: UserService,
+    ) -> bool:
+        if not await user_service.exists(user_id):
+            return False
+
+        await user_service.block_user(user_id)
+        return True
+
     async def __call__(
         self,
         handler: Callable[[Message | CallbackQuery, dict[str, Any]], Awaitable[Any]],
@@ -123,7 +145,22 @@ class AntiSpamMiddleware(BaseMiddleware):
             return None
 
         if not state.allow(now):
-            duration = state.apply_violation(now)
+            violation_level, duration = state.apply_violation(now)
+
+            if violation_level >= MAX_SPAM_VIOLATIONS:
+                user_service: UserService = data["user_service"]
+                was_blocked = await self._block_user(
+                    user_id=user_id,
+                    user_service=user_service,
+                )
+                self._states.pop(user_id, None)
+
+                if was_blocked:
+                    await self._notify_blocked(event)
+                else:
+                    await self._warn(event, duration)
+                return None
+
             await self._warn(event, duration)
             return None
 
