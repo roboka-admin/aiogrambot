@@ -16,7 +16,7 @@ from filters.admin import AdminFilter
 from keyboards.admin import admin_menu
 from keyboards.admin_cancel import admin_cancel_keyboard
 from keyboards.admin_user_actions import user_actions_keyboard
-from keyboards.admin_users import blocked_users_keyboard, users_keyboard
+from keyboards.admin_users import blocked_users_keyboard, user_management_keyboard, users_keyboard
 from models.user import User, UserStatus
 from services.notification import NotificationService
 from services.user import UserService
@@ -36,8 +36,21 @@ async def admin_handler(message: Message, state: FSMContext) -> None:
 
 
 @router.message(F.text == "👤 کاربران")
-async def users_handler(message: Message, user_service: UserService) -> None:
-    await _show_users_page(message=message, user_service=user_service, page=0)
+async def users_handler(message: Message) -> None:
+    await _show_user_management(message=message)
+
+
+@router.callback_query(F.data == "admin_user_management")
+async def user_management_handler(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await _show_user_management(message=callback.message, edit=True)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_browse_users")
+async def browse_users_handler(callback: CallbackQuery, user_service: UserService) -> None:
+    await _show_users_page(message=callback.message, user_service=user_service, page=0, edit=True)
+    await callback.answer()
 
 
 @router.callback_query(F.data == "admin_find_user")
@@ -50,8 +63,8 @@ async def find_user_start_handler(callback: CallbackQuery, state: FSMContext) ->
 @router.callback_query(F.data == "admin_cancel")
 async def admin_cancel_handler(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await callback.message.edit_text("❌ عملیات لغو شد.")
-    await callback.answer()
+    await _show_user_management(message=callback.message, edit=True)
+    await callback.answer("عملیات لغو شد.")
 
 
 @router.message(AdminUserStates.waiting_for_user_id)
@@ -68,7 +81,10 @@ async def find_user_handler(message: Message, state: FSMContext, user_service: U
         return
 
     await state.clear()
-    await message.answer(_user_details_text(user), reply_markup=user_actions_keyboard(user))
+    await message.answer(
+        _user_details_text(user),
+        reply_markup=user_actions_keyboard(user, source="management"),
+    )
 
 
 @router.callback_query(AdminUsersCallback.filter())
@@ -198,19 +214,29 @@ async def blocked_users_start_handler(callback: CallbackQuery, user_service: Use
     await callback.answer()
 
 
+async def _show_user_management(*, message: Message, edit: bool = False) -> None:
+    text = "👥 مدیریت کاربران\n\nیکی از گزینه‌ها را انتخاب کنید:"
+    keyboard = user_management_keyboard()
+    if edit:
+        await message.edit_text(text, reply_markup=keyboard)
+    else:
+        await message.answer(text, reply_markup=keyboard)
+
+
 async def _show_users_page(*, message: Message, user_service: UserService, page: int, edit: bool = False) -> None:
     users, total, page = await user_service.get_users_page(page=page, page_size=_PAGE_SIZE)
+    total_pages = max(ceil(total / _PAGE_SIZE), 1)
+    keyboard = users_keyboard(users=users, page=page, total_pages=total_pages)
+
     if total == 0:
         text = "👤 کاربران\n\nهنوز کاربری ثبت‌نام نکرده است."
-        if edit:
-            await message.edit_text(text)
-        else:
-            await message.answer(text)
-        return
+    else:
+        text = (
+            "👤 کاربران\n\n"
+            f"تعداد کل کاربران: {total}\n"
+            "برای مشاهده اطلاعات هر کاربر، روی نام او بزنید."
+        )
 
-    total_pages = ceil(total / _PAGE_SIZE)
-    text = "👤 کاربران\n\n" f"تعداد کل کاربران: {total}\n" "برای مشاهده اطلاعات هر کاربر، روی نام او بزنید."
-    keyboard = users_keyboard(users=users, page=page, total_pages=total_pages)
     if edit:
         await message.edit_text(text, reply_markup=keyboard)
     else:
@@ -219,18 +245,18 @@ async def _show_users_page(*, message: Message, user_service: UserService, page:
 
 async def _show_blocked_users_page(*, message: Message, user_service: UserService, page: int, edit: bool = False) -> None:
     users, total, page = await user_service.get_blocked_users_page(page=page, page_size=_PAGE_SIZE)
+    total_pages = max(ceil(total / _PAGE_SIZE), 1)
+    keyboard = blocked_users_keyboard(users=users, page=page, total_pages=total_pages)
+
     if total == 0:
         text = "🚫 کاربران مسدود\n\nهیچ کاربر مسدودی وجود ندارد."
-        keyboard = blocked_users_keyboard(users=[], page=0, total_pages=1)
-        if edit:
-            await message.edit_text(text, reply_markup=keyboard)
-        else:
-            await message.answer(text, reply_markup=keyboard)
-        return
+    else:
+        text = (
+            "🚫 کاربران مسدود\n\n"
+            f"تعداد کل کاربران مسدود: {total}\n"
+            "برای مشاهده اطلاعات هر کاربر، روی نام او بزنید."
+        )
 
-    total_pages = ceil(total / _PAGE_SIZE)
-    text = "🚫 کاربران مسدود\n\n" f"تعداد کل کاربران مسدود: {total}\n" "برای مشاهده اطلاعات هر کاربر، روی نام او بزنید."
-    keyboard = blocked_users_keyboard(users=users, page=page, total_pages=total_pages)
     if edit:
         await message.edit_text(text, reply_markup=keyboard)
     else:
