@@ -22,7 +22,6 @@ from services.notification import NotificationService
 from services.user import UserService
 from states.admin import AdminUserStates
 
-
 router = Router()
 router.message.filter(AdminFilter())
 router.callback_query.filter(AdminFilter())
@@ -33,11 +32,7 @@ _PAGE_SIZE = 5
 @router.message(Command("admin"))
 async def admin_handler(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await message.answer(
-        "👨‍💼 پنل مدیریت\n\n"
-        "یکی از گزینه‌ها را انتخاب کنید:",
-        reply_markup=admin_menu,
-    )
+    await message.answer("👨‍💼 پنل مدیریت\n\nیکی از گزینه‌ها را انتخاب کنید:", reply_markup=admin_menu)
 
 
 @router.message(F.text == "👤 کاربران")
@@ -45,172 +40,103 @@ async def users_handler(message: Message, user_service: UserService) -> None:
     await _show_users_page(message=message, user_service=user_service, page=0)
 
 
-@router.message(F.text == "🚫 کاربران مسدود")
-async def blocked_users_handler(message: Message, user_service: UserService) -> None:
-    await _show_blocked_users_page(message=message, user_service=user_service, page=0)
-
-
 @router.callback_query(F.data == "admin_find_user")
-async def find_user_start_handler(
-    callback: CallbackQuery,
-    state: FSMContext,
-) -> None:
+async def find_user_start_handler(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminUserStates.waiting_for_user_id)
-    await callback.message.answer(
-        "🔎 شناسه عددی کاربر را ارسال کنید:",
-        reply_markup=admin_cancel_keyboard,
-    )
+    await callback.message.answer("🔎 شناسه عددی کاربر را ارسال کنید:", reply_markup=admin_cancel_keyboard)
     await callback.answer()
 
 
 @router.callback_query(F.data == "admin_cancel")
-async def admin_cancel_handler(
-    callback: CallbackQuery,
-    state: FSMContext,
-) -> None:
+async def admin_cancel_handler(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await callback.message.edit_text("❌ عملیات لغو شد.")
     await callback.answer()
 
 
 @router.message(AdminUserStates.waiting_for_user_id)
-async def find_user_handler(
-    message: Message,
-    state: FSMContext,
-    user_service: UserService,
-) -> None:
+async def find_user_handler(message: Message, state: FSMContext, user_service: UserService) -> None:
     text = (message.text or "").strip()
     if not text.isdigit():
-        await message.answer(
-            "❌ شناسه کاربر باید فقط شامل عدد باشد. دوباره ارسال کنید:",
-            reply_markup=admin_cancel_keyboard,
-        )
+        await message.answer("❌ شناسه کاربر باید فقط شامل عدد باشد. دوباره ارسال کنید:", reply_markup=admin_cancel_keyboard)
         return
 
-    telegram_id = int(text)
     try:
-        user = await user_service.get_user(telegram_id)
+        user = await user_service.get_user(int(text))
     except UserNotFoundError:
-        await message.answer(
-            "❌ کاربری با این شناسه پیدا نشد. دوباره تلاش کنید:",
-            reply_markup=admin_cancel_keyboard,
-        )
+        await message.answer("❌ کاربری با این شناسه پیدا نشد. دوباره تلاش کنید:", reply_markup=admin_cancel_keyboard)
         return
 
     await state.clear()
-    await message.answer(
-        _user_details_text(user),
-        reply_markup=user_actions_keyboard(user),
-    )
+    await message.answer(_user_details_text(user), reply_markup=user_actions_keyboard(user))
 
 
 @router.callback_query(AdminUsersCallback.filter())
-async def users_page_handler(
-    callback: CallbackQuery,
-    callback_data: AdminUsersCallback,
-    user_service: UserService,
-) -> None:
-    await _show_users_page(
-        message=callback.message,
-        user_service=user_service,
-        page=callback_data.page,
-        edit=True,
-    )
+async def users_page_handler(callback: CallbackQuery, callback_data: AdminUsersCallback, user_service: UserService) -> None:
+    await _show_users_page(message=callback.message, user_service=user_service, page=callback_data.page, edit=True)
     await callback.answer()
 
 
 @router.callback_query(AdminBlockedUsersCallback.filter())
-async def blocked_users_page_handler(
-    callback: CallbackQuery,
-    callback_data: AdminBlockedUsersCallback,
-    user_service: UserService,
-) -> None:
-    await _show_blocked_users_page(
-        message=callback.message,
-        user_service=user_service,
-        page=callback_data.page,
-        edit=True,
-    )
+async def blocked_users_page_handler(callback: CallbackQuery, callback_data: AdminBlockedUsersCallback, user_service: UserService) -> None:
+    await _show_blocked_users_page(message=callback.message, user_service=user_service, page=callback_data.page, edit=True)
     await callback.answer()
 
 
 @router.callback_query(AdminUserCallback.filter())
-async def user_details_handler(
-    callback: CallbackQuery,
-    callback_data: AdminUserCallback,
-    user_service: UserService,
-) -> None:
-    user = await user_service.get_user(callback_data.telegram_id)
+async def user_details_handler(callback: CallbackQuery, callback_data: AdminUserCallback, user_service: UserService) -> None:
+    try:
+        user = await user_service.get_user(callback_data.telegram_id)
+    except UserNotFoundError:
+        await callback.answer("کاربر پیدا نشد.", show_alert=True)
+        return
+
     await callback.message.edit_text(
         _user_details_text(user),
-        reply_markup=user_actions_keyboard(user),
+        reply_markup=user_actions_keyboard(user, source=callback_data.source, page=callback_data.page),
     )
     await callback.answer()
 
 
-@router.callback_query(
-    AdminUserActionCallback.filter(F.action.in_({"add_coin", "remove_coin"}))
-)
-async def coin_action_start_handler(
-    callback: CallbackQuery,
-    callback_data: AdminUserActionCallback,
-    state: FSMContext,
-) -> None:
+@router.callback_query(AdminUserActionCallback.filter(F.action.in_({"add_coin", "remove_coin"})))
+async def coin_action_start_handler(callback: CallbackQuery, callback_data: AdminUserActionCallback, state: FSMContext) -> None:
     await state.set_state(AdminUserStates.waiting_for_coin_amount)
     await state.update_data(
         coin_action=callback_data.action,
         telegram_id=callback_data.telegram_id,
+        source=callback_data.source,
+        page=callback_data.page,
     )
     action_text = "افزایش" if callback_data.action == "add_coin" else "کاهش"
-    await callback.message.answer(
-        f"➖➕ مقدار {action_text} سکه را به صورت عدد ارسال کنید:",
-        reply_markup=admin_cancel_keyboard,
-    )
+    await callback.message.answer(f"➖➕ مقدار {action_text} سکه را به صورت عدد ارسال کنید:", reply_markup=admin_cancel_keyboard)
     await callback.answer()
 
 
 @router.message(AdminUserStates.waiting_for_coin_amount)
-async def coin_amount_handler(
-    message: Message,
-    state: FSMContext,
-    user_service: UserService,
-    notification_service: NotificationService,
-) -> None:
+async def coin_amount_handler(message: Message, state: FSMContext, user_service: UserService, notification_service: NotificationService) -> None:
     text = (message.text or "").strip()
     if not text.isdigit() or int(text) <= 0:
-        await message.answer(
-            "❌ مقدار باید یک عدد صحیح بزرگ‌تر از صفر باشد. دوباره ارسال کنید:",
-            reply_markup=admin_cancel_keyboard,
-        )
+        await message.answer("❌ مقدار باید یک عدد صحیح بزرگ‌تر از صفر باشد. دوباره ارسال کنید:", reply_markup=admin_cancel_keyboard)
         return
 
-    amount = int(text)
     data = await state.get_data()
+    amount = int(text)
     telegram_id = data["telegram_id"]
+    source = data.get("source", "users")
+    page = data.get("page", 0)
 
     if data["coin_action"] == "add_coin":
         user = await user_service.add_coins(telegram_id, amount)
-        await notification_service.coins_added(
-            telegram_id,
-            amount,
-            user.coins,
-        )
+        await notification_service.coins_added(telegram_id, amount, user.coins)
         notice = f"✅ {amount} سکه اضافه شد."
     else:
         user = await user_service.remove_coins(telegram_id, amount)
-        await notification_service.coins_removed(
-            telegram_id,
-            amount,
-            user.coins,
-        )
+        await notification_service.coins_removed(telegram_id, amount, user.coins)
         notice = f"✅ {amount} سکه کم شد."
 
     await state.clear()
     await message.answer(notice)
-    await message.answer(
-        _user_details_text(user),
-        reply_markup=user_actions_keyboard(user),
-    )
+    await message.answer(_user_details_text(user), reply_markup=user_actions_keyboard(user, source=source, page=page))
 
 
 @router.callback_query(AdminUserActionCallback.filter())
@@ -226,29 +152,35 @@ async def user_action_handler(
     if action == "add_warning":
         user = await user_service.add_warning(telegram_id)
         notice = "یک اخطار اضافه شد."
-
         if user.status is UserStatus.BLOCKED:
             await notification_service.user_auto_blocked(telegram_id)
         else:
-            await notification_service.warning_added(
-                telegram_id,
-                user.warnings,
-            )
+            await notification_service.warning_added(telegram_id, user.warnings)
     elif action == "block":
         user = await user_service.block_user(telegram_id)
         notice = "کاربر مسدود شد."
         await notification_service.user_blocked(telegram_id)
     elif action == "unblock":
         user = await user_service.unblock_user(telegram_id)
-        notice = "کاربر رفع مسدودیت شد و اخطارها صفر شدند."
         await notification_service.user_unblocked(telegram_id)
+        notice = "کاربر رفع مسدودیت شد و اخطارها صفر شدند."
+
+        if callback_data.source == "blocked":
+            await _show_blocked_users_page(
+                message=callback.message,
+                user_service=user_service,
+                page=callback_data.page,
+                edit=True,
+            )
+            await callback.answer(notice)
+            return
     else:
         await callback.answer("عملیات نامعتبر است.", show_alert=True)
         return
 
     await callback.message.edit_text(
         _user_details_text(user),
-        reply_markup=user_actions_keyboard(user),
+        reply_markup=user_actions_keyboard(user, source=callback_data.source, page=callback_data.page),
     )
     await callback.answer(notice)
 
@@ -258,46 +190,14 @@ async def noop_handler(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
-@router.callback_query(F.data == "admin_users")
-async def return_to_users_handler(
-    callback: CallbackQuery,
-    user_service: UserService,
-) -> None:
-    await _show_users_page(
-        message=callback.message,
-        user_service=user_service,
-        page=0,
-        edit=True,
-    )
-    await callback.answer()
-
-
 @router.callback_query(F.data == "admin_blocked_users")
-async def blocked_users_start_handler(
-    callback: CallbackQuery,
-    user_service: UserService,
-) -> None:
-    await _show_blocked_users_page(
-        message=callback.message,
-        user_service=user_service,
-        page=0,
-        edit=True,
-    )
+async def blocked_users_start_handler(callback: CallbackQuery, user_service: UserService) -> None:
+    await _show_blocked_users_page(message=callback.message, user_service=user_service, page=0, edit=True)
     await callback.answer()
 
 
-async def _show_users_page(
-    *,
-    message: Message,
-    user_service: UserService,
-    page: int,
-    edit: bool = False,
-) -> None:
-    users, total, page = await user_service.get_users_page(
-        page=page,
-        page_size=_PAGE_SIZE,
-    )
-
+async def _show_users_page(*, message: Message, user_service: UserService, page: int, edit: bool = False) -> None:
+    users, total, page = await user_service.get_users_page(page=page, page_size=_PAGE_SIZE)
     if total == 0:
         text = "👤 کاربران\n\nهنوز کاربری ثبت‌نام نکرده است."
         if edit:
@@ -307,47 +207,28 @@ async def _show_users_page(
         return
 
     total_pages = ceil(total / _PAGE_SIZE)
-    text = (
-        "👤 کاربران\n\n"
-        f"تعداد کل کاربران: {total}\n"
-        "برای مشاهده اطلاعات هر کاربر، روی نام او بزنید."
-    )
+    text = "👤 کاربران\n\n" f"تعداد کل کاربران: {total}\n" "برای مشاهده اطلاعات هر کاربر، روی نام او بزنید."
     keyboard = users_keyboard(users=users, page=page, total_pages=total_pages)
-
     if edit:
         await message.edit_text(text, reply_markup=keyboard)
     else:
         await message.answer(text, reply_markup=keyboard)
 
 
-async def _show_blocked_users_page(
-    *,
-    message: Message,
-    user_service: UserService,
-    page: int,
-    edit: bool = False,
-) -> None:
-    users, total, page = await user_service.get_blocked_users_page(
-        page=page,
-        page_size=_PAGE_SIZE,
-    )
-
+async def _show_blocked_users_page(*, message: Message, user_service: UserService, page: int, edit: bool = False) -> None:
+    users, total, page = await user_service.get_blocked_users_page(page=page, page_size=_PAGE_SIZE)
     if total == 0:
         text = "🚫 کاربران مسدود\n\nهیچ کاربر مسدودی وجود ندارد."
+        keyboard = users_keyboard(users=[], page=0, total_pages=1)
         if edit:
-            await message.edit_text(text)
+            await message.edit_text(text, reply_markup=keyboard)
         else:
-            await message.answer(text)
+            await message.answer(text, reply_markup=keyboard)
         return
 
     total_pages = ceil(total / _PAGE_SIZE)
-    text = (
-        "🚫 کاربران مسدود\n\n"
-        f"تعداد کل کاربران مسدود: {total}\n"
-        "برای مشاهده اطلاعات هر کاربر، روی نام او بزنید."
-    )
+    text = "🚫 کاربران مسدود\n\n" f"تعداد کل کاربران مسدود: {total}\n" "برای مشاهده اطلاعات هر کاربر، روی نام او بزنید."
     keyboard = blocked_users_keyboard(users=users, page=page, total_pages=total_pages)
-
     if edit:
         await message.edit_text(text, reply_markup=keyboard)
     else:
