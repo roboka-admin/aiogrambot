@@ -3,25 +3,25 @@ from enum import Enum
 
 
 class UserStatus(str, Enum):
-    """
-    Represents the current status of a user.
-    """
-
     ACTIVE = "active"
     BLOCKED = "blocked"
 
 
+class RegistrationStatus(str, Enum):
+    UNREGISTERED = "unregistered"
+    REGISTERED = "registered"
+
+
 @dataclass(slots=True)
 class User:
-    """
-    Domain model representing a Telegram user.
-    """
+    """Domain model for every Telegram user known to the bot."""
 
     telegram_id: int
-    name: str
-    age: int
-
+    telegram_name: str
+    username: str | None = None
+    name: str | None = None
+    age: int | None = None
     coins: int = 0
     warnings: int = 0
-
     status: UserStatus = UserStatus.ACTIVE
+    registration_status: RegistrationStatus = RegistrationStatus.UNREGISTERED
