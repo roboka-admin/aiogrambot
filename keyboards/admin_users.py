@@ -11,7 +11,8 @@ def users_keyboard(
     total_pages: int,
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = [
-        [InlineKeyboardButton(text="🔎 جستجوی کاربر با ID", callback_data="admin_find_user")]
+        [InlineKeyboardButton(text="🔎 جستجوی کاربر با ID", callback_data="admin_find_user")],
+        [InlineKeyboardButton(text="🚫 کاربران مسدود", callback_data="admin_blocked_users")],
     ]
 
     for user in users:
@@ -19,7 +20,9 @@ def users_keyboard(
             InlineKeyboardButton(
                 text=f"👤 {user.name} | {user.telegram_id}",
                 callback_data=AdminUserCallback(
-                    telegram_id=user.telegram_id
+                    telegram_id=user.telegram_id,
+                    source="users",
+                    page=page,
                 ).pack(),
             )
         ])
@@ -65,7 +68,9 @@ def blocked_users_keyboard(
             InlineKeyboardButton(
                 text=f"👤 {user.name} | {user.telegram_id}",
                 callback_data=AdminUserCallback(
-                    telegram_id=user.telegram_id
+                    telegram_id=user.telegram_id,
+                    source="blocked",
+                    page=page,
                 ).pack(),
             )
         ])
