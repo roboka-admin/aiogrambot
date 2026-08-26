@@ -89,3 +89,19 @@ class UserService:
 
     async def get_active_telegram_ids(self) -> list[int]:
         return await self._user_repository.list_active_telegram_ids()
+
+    async def get_blocked_users_page(
+        self,
+        *,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[User], int, int]:
+        total = await self._user_repository.count_blocked()
+        total_pages = max(1, ceil(total / page_size))
+        page = min(max(page, 0), total_pages - 1)
+
+        users = await self._user_repository.list_blocked_page(
+            offset=page * page_size,
+            limit=page_size,
+        )
+        return users, total, page

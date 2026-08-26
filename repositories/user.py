@@ -90,6 +90,24 @@ class UserRepository(IUserRepository):
         )
         return list(result.scalars())
 
+    async def list_blocked_page(self, *, offset: int, limit: int) -> list[User]:
+        result = await self._session.execute(
+            select(UserRecord)
+            .where(UserRecord.status == UserStatus.BLOCKED.value)
+            .order_by(UserRecord.telegram_id)
+            .offset(offset)
+            .limit(limit)
+        )
+        return [self._to_domain(record) for record in result.scalars()]
+
+    async def count_blocked(self) -> int:
+        result = await self._session.execute(
+            select(func.count()).select_from(UserRecord).where(
+                UserRecord.status == UserStatus.BLOCKED.value
+            )
+        )
+        return result.scalar_one()
+
     @staticmethod
     def _to_domain(record: UserRecord) -> User:
         return User(

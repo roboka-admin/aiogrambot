@@ -6,6 +6,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from callbacks.admin import (
+    AdminBlockedUsersCallback,
     AdminUserActionCallback,
     AdminUserCallback,
     AdminUsersCallback,
@@ -15,7 +16,7 @@ from filters.admin import AdminFilter
 from keyboards.admin import admin_menu
 from keyboards.admin_cancel import admin_cancel_keyboard
 from keyboards.admin_user_actions import user_actions_keyboard
-from keyboards.admin_users import users_keyboard
+from keyboards.admin_users import blocked_users_keyboard, users_keyboard
 from models.user import User, UserStatus
 from services.notification import NotificationService
 from services.user import UserService
@@ -42,6 +43,11 @@ async def admin_handler(message: Message, state: FSMContext) -> None:
 @router.message(F.text == "👤 کاربران")
 async def users_handler(message: Message, user_service: UserService) -> None:
     await _show_users_page(message=message, user_service=user_service, page=0)
+
+
+@router.message(F.text == "🚫 کاربران مسدود")
+async def blocked_users_handler(message: Message, user_service: UserService) -> None:
+    await _show_blocked_users_page(message=message, user_service=user_service, page=0)
 
 
 @router.callback_query(F.data == "admin_find_user")
@@ -105,6 +111,21 @@ async def users_page_handler(
     user_service: UserService,
 ) -> None:
     await _show_users_page(
+        message=callback.message,
+        user_service=user_service,
+        page=callback_data.page,
+        edit=True,
+    )
+    await callback.answer()
+
+
+@router.callback_query(AdminBlockedUsersCallback.filter())
+async def blocked_users_page_handler(
+    callback: CallbackQuery,
+    callback_data: AdminBlockedUsersCallback,
+    user_service: UserService,
+) -> None:
+    await _show_blocked_users_page(
         message=callback.message,
         user_service=user_service,
         page=callback_data.page,
@@ -237,6 +258,34 @@ async def noop_handler(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
+@router.callback_query(F.data == "admin_users")
+async def return_to_users_handler(
+    callback: CallbackQuery,
+    user_service: UserService,
+) -> None:
+    await _show_users_page(
+        message=callback.message,
+        user_service=user_service,
+        page=0,
+        edit=True,
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_blocked_users")
+async def blocked_users_start_handler(
+    callback: CallbackQuery,
+    user_service: UserService,
+) -> None:
+    await _show_blocked_users_page(
+        message=callback.message,
+        user_service=user_service,
+        page=0,
+        edit=True,
+    )
+    await callback.answer()
+
+
 async def _show_users_page(
     *,
     message: Message,
@@ -264,6 +313,40 @@ async def _show_users_page(
         "برای مشاهده اطلاعات هر کاربر، روی نام او بزنید."
     )
     keyboard = users_keyboard(users=users, page=page, total_pages=total_pages)
+
+    if edit:
+        await message.edit_text(text, reply_markup=keyboard)
+    else:
+        await message.answer(text, reply_markup=keyboard)
+
+
+async def _show_blocked_users_page(
+    *,
+    message: Message,
+    user_service: UserService,
+    page: int,
+    edit: bool = False,
+) -> None:
+    users, total, page = await user_service.get_blocked_users_page(
+        page=page,
+        page_size=_PAGE_SIZE,
+    )
+
+    if total == 0:
+        text = "🚫 کاربران مسدود\n\nهیچ کاربر مسدودی وجود ندارد."
+        if edit:
+            await message.edit_text(text)
+        else:
+            await message.answer(text)
+        return
+
+    total_pages = ceil(total / _PAGE_SIZE)
+    text = (
+        "🚫 کاربران مسدود\n\n"
+        f"تعداد کل کاربران مسدود: {total}\n"
+        "برای مشاهده اطلاعات هر کاربر، روی نام او بزنید."
+    )
+    keyboard = blocked_users_keyboard(users=users, page=page, total_pages=total_pages)
 
     if edit:
         await message.edit_text(text, reply_markup=keyboard)

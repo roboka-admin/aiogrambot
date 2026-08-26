@@ -33,3 +33,7 @@ class AdminBroadcastEditCallback(CallbackData, prefix="admin_broadcast_edit"):
 
 class AdminBroadcastCancelCallback(CallbackData, prefix="admin_broadcast_cancel"):
     pass
+
+
+class AdminBlockedUsersCallback(CallbackData, prefix="admin_blocked_users"):
+    page: int

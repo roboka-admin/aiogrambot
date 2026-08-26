@@ -32,3 +32,9 @@ class IUserRepository(Protocol):
 
     async def list_active_telegram_ids(self) -> list[int]:
         ...
+
+    async def list_blocked_page(self, *, offset: int, limit: int) -> list[User]:
+        ...
+
+    async def count_blocked(self) -> int:
+        ...

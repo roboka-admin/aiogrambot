@@ -5,6 +5,9 @@ admin_menu = ReplyKeyboardMarkup(
     keyboard=[
         [
             KeyboardButton(text="👤 کاربران"),
+            KeyboardButton(text="🚫 کاربران مسدود"),
+        ],
+        [
             KeyboardButton(text="📩 پشتیبانی"),
         ],
         [
