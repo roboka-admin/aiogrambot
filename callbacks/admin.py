@@ -7,11 +7,15 @@ class AdminUsersCallback(CallbackData, prefix="admin_users"):
 
 class AdminUserCallback(CallbackData, prefix="admin_user"):
     telegram_id: int
+    source: str = "users"
+    page: int = 0
 
 
 class AdminUserActionCallback(CallbackData, prefix="admin_user_action"):
     action: str
     telegram_id: int
+    source: str = "users"
+    page: int = 0
 
 
 class AdminUserAmountCallback(CallbackData, prefix="admin_user_amount"):
