@@ -135,8 +135,10 @@ async def coin_amount_handler(message: Message, state: FSMContext, user_service:
         notice = f"✅ {amount} سکه کم شد."
 
     await state.clear()
-    await message.answer(notice)
-    await message.answer(_user_details_text(user), reply_markup=user_actions_keyboard(user, source=source, page=page))
+    await message.answer(
+        f"{notice}\n\n{_user_details_text(user)}",
+        reply_markup=user_actions_keyboard(user, source=source, page=page),
+    )
 
 
 @router.callback_query(AdminUserActionCallback.filter())
@@ -219,7 +221,7 @@ async def _show_blocked_users_page(*, message: Message, user_service: UserServic
     users, total, page = await user_service.get_blocked_users_page(page=page, page_size=_PAGE_SIZE)
     if total == 0:
         text = "🚫 کاربران مسدود\n\nهیچ کاربر مسدودی وجود ندارد."
-        keyboard = users_keyboard(users=[], page=0, total_pages=1)
+        keyboard = blocked_users_keyboard(users=[], page=0, total_pages=1)
         if edit:
             await message.edit_text(text, reply_markup=keyboard)
         else:

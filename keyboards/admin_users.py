@@ -11,8 +11,10 @@ def users_keyboard(
     total_pages: int,
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = [
-        [InlineKeyboardButton(text="🔎 جستجوی کاربر با ID", callback_data="admin_find_user")],
-        [InlineKeyboardButton(text="🚫 کاربران مسدود", callback_data="admin_blocked_users")],
+        [
+            InlineKeyboardButton(text="🔎 جستجو با ID", callback_data="admin_find_user"),
+            InlineKeyboardButton(text="🚫 کاربران مسدود", callback_data="admin_blocked_users"),
+        ]
     ]
 
     for user in users:
@@ -31,7 +33,7 @@ def users_keyboard(
     if page > 0:
         navigation.append(
             InlineKeyboardButton(
-                text="◀️ قبلی",
+                text="⬅️ قبلی",
                 callback_data=AdminUsersCallback(page=page - 1).pack(),
             )
         )
@@ -43,7 +45,7 @@ def users_keyboard(
     if page + 1 < total_pages:
         navigation.append(
             InlineKeyboardButton(
-                text="بعدی ▶️",
+                text="بعدی ➡️",
                 callback_data=AdminUsersCallback(page=page + 1).pack(),
             )
         )
@@ -59,8 +61,10 @@ def blocked_users_keyboard(
     total_pages: int,
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = [
-        [InlineKeyboardButton(text="🔎 جستجوی کاربر با ID", callback_data="admin_find_user")],
-        [InlineKeyboardButton(text="🔙 بازگشت به لیست کاربران", callback_data=AdminUsersCallback(page=0).pack())],
+        [
+            InlineKeyboardButton(text="🔎 جستجو با ID", callback_data="admin_find_user"),
+            InlineKeyboardButton(text="🔙 کاربران", callback_data=AdminUsersCallback(page=0).pack()),
+        ]
     ]
 
     for user in users:
@@ -79,7 +83,7 @@ def blocked_users_keyboard(
     if page > 0:
         navigation.append(
             InlineKeyboardButton(
-                text="◀️ قبلی",
+                text="⬅️ قبلی",
                 callback_data=AdminBlockedUsersCallback(page=page - 1).pack(),
             )
         )
@@ -91,7 +95,7 @@ def blocked_users_keyboard(
     if page + 1 < total_pages:
         navigation.append(
             InlineKeyboardButton(
-                text="بعدی ▶️",
+                text="بعدی ➡️",
                 callback_data=AdminBlockedUsersCallback(page=page + 1).pack(),
             )
         )

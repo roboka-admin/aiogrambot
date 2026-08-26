@@ -7,6 +7,7 @@ from core.database import Database
 from repositories.support import SupportRepository
 from repositories.user import UserRepository
 from services.broadcast import BroadcastService
+from services.notification import NotificationService
 from services.register import RegisterService
 from services.support import SupportService
 from services.user import UserService
@@ -45,10 +46,12 @@ class ServicesMiddleware(BaseMiddleware):
                     user_repository=user_repository,
                     bot=data["bot"],
                 )
+                notification_service = NotificationService(bot=data["bot"])
 
                 data["register_service"] = register_service
                 data["user_service"] = user_service
                 data["support_service"] = support_service
                 data["broadcast_service"] = broadcast_service
+                data["notification_service"] = notification_service
 
                 return await handler(event, data)

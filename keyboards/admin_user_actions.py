@@ -29,7 +29,7 @@ def user_actions_keyboard(
         if source == "blocked"
         else AdminUsersCallback(page=page).pack()
     )
-    back_text = "🔙 بازگشت به کاربران مسدود" if source == "blocked" else "🔙 بازگشت به کاربران"
+    back_text = "⬅️ بازگشت به کاربران مسدود" if source == "blocked" else "⬅️ بازگشت به کاربران"
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -37,8 +37,10 @@ def user_actions_keyboard(
                 InlineKeyboardButton(text="➕ افزایش سکه", callback_data=action_callback("add_coin")),
                 InlineKeyboardButton(text="➖ کاهش سکه", callback_data=action_callback("remove_coin")),
             ],
-            [InlineKeyboardButton(text="⚠️ افزودن اخطار", callback_data=action_callback("add_warning"))],
-            [InlineKeyboardButton(text=block_text, callback_data=action_callback(block_action))],
+            [
+                InlineKeyboardButton(text="⚠️ افزودن اخطار", callback_data=action_callback("add_warning")),
+                InlineKeyboardButton(text=block_text, callback_data=action_callback(block_action)),
+            ],
             [InlineKeyboardButton(text=back_text, callback_data=back_callback)],
         ]
     )
