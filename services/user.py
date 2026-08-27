@@ -1,6 +1,6 @@
-from datetime import datetime
 from math import ceil
 
+from core.timezone import tehran_now
 from exceptions.user import UserNotFoundError
 from models.user import RegistrationStatus, User, UserStatus
 from repositories.interfaces.user import IUserRepository
@@ -20,7 +20,7 @@ class UserService:
         user.telegram_name = telegram_name
         user.username = username
         # Update last_seen_at on every interaction, but never modify first_seen_at
-        user.last_seen_at = datetime.utcnow()
+        user.last_seen_at = tehran_now()
         return await self._save(user)
 
     async def exists(self, telegram_id: int) -> bool:
