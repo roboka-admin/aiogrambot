@@ -1,7 +1,7 @@
 from datetime import timedelta
 from math import ceil
 
-from core.timezone import TEHRAN_TZ, tehran_now
+from core.timezone import tehran_now
 from exceptions.user import UserNotFoundError
 from models.user import RegistrationStatus, User, UserStatus
 from repositories.interfaces.user import IUserRepository
@@ -13,14 +13,25 @@ class UserService:
     def __init__(self, *, user_repository: IUserRepository) -> None:
         self._user_repository = user_repository
 
-    async def get_or_create_telegram_user(self, *, telegram_id: int, telegram_name: str, username: str | None) -> User:
+    async def get_or_create_telegram_user(
+        self,
+        *,
+        telegram_id: int,
+        telegram_name: str,
+        username: str | None,
+    ) -> User:
         user = await self._user_repository.get_by_telegram_id(telegram_id)
         if user is None:
-            return await self._user_repository.create(User(telegram_id=telegram_id, telegram_name=telegram_name, username=username))
-        # Update telegram_name and username if changed
+            return await self._user_repository.create(
+                User(
+                    telegram_id=telegram_id,
+                    telegram_name=telegram_name,
+                    username=username,
+                )
+            )
+
         user.telegram_name = telegram_name
         user.username = username
-        # Update last_seen_at on every interaction, but never modify first_seen_at
         user.last_seen_at = tehran_now()
         return await self._save(user)
 
@@ -33,11 +44,17 @@ class UserService:
             raise UserNotFoundError()
         return user
 
-    async def get_users_page(self, *, page: int, page_size: int) -> tuple[list[User], int, int]:
+    async def get_users_page(
+        self, *, page: int, page_size: int
+    ) -> tuple[list[User], int, int]:
         total = await self._user_repository.count()
         total_pages = max(1, ceil(total / page_size))
         page = min(max(page, 0), total_pages - 1)
-        return await self._user_repository.list_page(offset=page * page_size, limit=page_size), total, page
+        users = await self._user_repository.list_page(
+            offset=page * page_size,
+            limit=page_size,
+        )
+        return users, total, page
 
     async def get_user_counts(self) -> dict[str, int]:
         return {
@@ -49,28 +66,30 @@ class UserService:
 
     async def get_user_statistics(self) -> dict[str, int]:
         now = tehran_now()
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = now.replace(
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
         seven_days_ago = today_start - timedelta(days=7)
         thirty_days_ago = today_start - timedelta(days=30)
 
-        total = await self._user_repository.count()
-        registered = await self._user_repository.count_registered()
-        unregistered = await self._user_repository.count_unregistered()
-        blocked = await self._user_repository.count_blocked()
-        active = await self._user_repository.count_active()
-        active_today = await self._user_repository.count_active_today(today_start)
-        active_7d = await self._user_repository.count_active_last_7_days(seven_days_ago)
-        inactive_30d = await self._user_repository.count_inactive_30_days(thirty_days_ago)
-
         return {
-            "total": total,
-            "registered": registered,
-            "unregistered": unregistered,
-            "blocked": blocked,
-            "active": active,
-            "active_today": active_today,
-            "active_7d": active_7d,
-            "inactive_30d": inactive_30d,
+            "total": await self._user_repository.count(),
+            "registered": await self._user_repository.count_registered(),
+            "unregistered": await self._user_repository.count_unregistered(),
+            "blocked": await self._user_repository.count_blocked(),
+            "active": await self._user_repository.count_active(),
+            "active_today": await self._user_repository.count_active_today(
+                today_start
+            ),
+            "active_7d": await self._user_repository.count_active_last_7_days(
+                seven_days_ago
+            ),
+            "inactive_30d": await self._user_repository.count_inactive_30_days(
+                thirty_days_ago
+            ),
         }
 
     async def update_name(self, telegram_id: int, name: str) -> User:
@@ -83,7 +102,13 @@ class UserService:
         user.age = age
         return await self._save(user)
 
-    async def complete_registration(self, *, telegram_id: int, name: str, age: int) -> User:
+    async def complete_registration(
+        self,
+        *,
+        telegram_id: int,
+        name: str,
+        age: int,
+    ) -> User:
         user = await self.get_user(telegram_id)
         if user.registration_status == RegistrationStatus.REGISTERED:
             raise ValueError("User is already registered")
@@ -93,22 +118,29 @@ class UserService:
         return await self._save(user)
 
     async def add_coins(self, telegram_id: int, amount: int = 1) -> User:
-        if amount <= 0: raise ValueError("Amount must be positive")
-        user = await self.get_user(telegram_id); user.coins += amount
+        if amount <= 0:
+            raise ValueError("Amount must be positive")
+        user = await self.get_user(telegram_id)
+        user.coins += amount
         return await self._save(user)
 
     async def remove_coins(self, telegram_id: int, amount: int = 1) -> User:
-        if amount <= 0: raise ValueError("Amount must be positive")
-        user = await self.get_user(telegram_id); user.coins = max(0, user.coins - amount)
+        if amount <= 0:
+            raise ValueError("Amount must be positive")
+        user = await self.get_user(telegram_id)
+        user.coins = max(0, user.coins - amount)
         return await self._save(user)
 
     async def add_warning(self, telegram_id: int) -> User:
-        user = await self.get_user(telegram_id); user.warnings += 1
-        if user.warnings >= _MAX_WARNINGS: user.status = UserStatus.BLOCKED
+        user = await self.get_user(telegram_id)
+        user.warnings += 1
+        if user.warnings >= _MAX_WARNINGS:
+            user.status = UserStatus.BLOCKED
         return await self._save(user)
 
     async def block_user(self, telegram_id: int) -> User:
-        user = await self.get_user(telegram_id); user.status = UserStatus.BLOCKED
+        user = await self.get_user(telegram_id)
+        user.status = UserStatus.BLOCKED
         return await self._save(user)
 
     async def unblock_user(self, telegram_id: int) -> User:
@@ -122,11 +154,21 @@ class UserService:
         assert updated is not None
         return updated
 
-    async def get_active_telegram_ids(self, *, registered_only: bool = False) -> list[int]:
-        return await self._user_repository.list_active_telegram_ids(registered_only=registered_only)
+    async def get_active_telegram_ids(
+        self, *, registered_only: bool = False
+    ) -> list[int]:
+        return await self._user_repository.list_active_telegram_ids(
+            registered_only=registered_only
+        )
 
-    async def get_blocked_users_page(self, *, page: int, page_size: int) -> tuple[list[User], int, int]:
+    async def get_blocked_users_page(
+        self, *, page: int, page_size: int
+    ) -> tuple[list[User], int, int]:
         total = await self._user_repository.count_blocked()
         total_pages = max(1, ceil(total / page_size))
         page = min(max(page, 0), total_pages - 1)
-        return await self._user_repository.list_blocked_page(offset=page * page_size, limit=page_size), total, page
+        users = await self._user_repository.list_blocked_page(
+            offset=page * page_size,
+            limit=page_size,
+        )
+        return users, total, page
