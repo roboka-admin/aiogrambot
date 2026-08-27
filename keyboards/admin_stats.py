@@ -16,11 +16,7 @@ def stats_dashboard_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="🖥️ وضعیت سیستم", callback_data=AdminStatsCallback(section="system").pack()),
-        ],
-        [
-            InlineKeyboardButton(text="🔄 بروزرسانی", callback_data=AdminStatsRefreshCallback(section="dashboard").pack()),
-            InlineKeyboardButton(text="⬅️ پنل مدیریت", callback_data="admin_user_management"),
-        ],
+        ]
     ])
 
 
