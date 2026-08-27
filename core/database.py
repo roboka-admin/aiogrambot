@@ -35,6 +35,10 @@ class Database:
         if "registration_status" not in columns:
             await connection.execute(text("ALTER TABLE users ADD COLUMN registration_status VARCHAR(20) NOT NULL DEFAULT 'unregistered'"))
             await connection.execute(text("UPDATE users SET registration_status = 'registered'"))
+        if "first_seen_at" not in columns:
+            await connection.execute(text("ALTER TABLE users ADD COLUMN first_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"))
+        if "last_seen_at" not in columns:
+            await connection.execute(text("ALTER TABLE users ADD COLUMN last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"))
         await connection.execute(text("ALTER TABLE users MODIFY COLUMN name VARCHAR(100) NULL"))
         await connection.execute(text("ALTER TABLE users MODIFY COLUMN age INTEGER NULL"))
 

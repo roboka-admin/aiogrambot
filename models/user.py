@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 
 
@@ -25,3 +26,5 @@ class User:
     warnings: int = 0
     status: UserStatus = UserStatus.ACTIVE
     registration_status: RegistrationStatus = RegistrationStatus.UNREGISTERED
+    first_seen_at: datetime = field(default_factory=datetime.utcnow)
+    last_seen_at: datetime = field(default_factory=datetime.utcnow)

@@ -1,3 +1,4 @@
+from datetime import datetime
 from math import ceil
 
 from exceptions.user import UserNotFoundError
@@ -15,8 +16,11 @@ class UserService:
         user = await self._user_repository.get_by_telegram_id(telegram_id)
         if user is None:
             return await self._user_repository.create(User(telegram_id=telegram_id, telegram_name=telegram_name, username=username))
+        # Update telegram_name and username if changed
         user.telegram_name = telegram_name
         user.username = username
+        # Update last_seen_at on every interaction, but never modify first_seen_at
+        user.last_seen_at = datetime.utcnow()
         return await self._save(user)
 
     async def exists(self, telegram_id: int) -> bool:

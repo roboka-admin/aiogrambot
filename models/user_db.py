@@ -1,4 +1,5 @@
-from sqlalchemy import String
+from datetime import datetime
+from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base
@@ -19,3 +20,5 @@ class UserRecord(Base):
     registration_status: Mapped[str] = mapped_column(
         String(20), default=RegistrationStatus.UNREGISTERED.value
     )
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

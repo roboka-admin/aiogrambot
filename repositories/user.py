@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +23,8 @@ class UserRepository(IUserRepository):
             warnings=user.warnings,
             status=user.status.value,
             registration_status=user.registration_status.value,
+            first_seen_at=user.first_seen_at,
+            last_seen_at=user.last_seen_at,
         )
         self._session.add(record)
         await self._session.flush()
@@ -47,6 +50,8 @@ class UserRepository(IUserRepository):
         record.warnings = user.warnings
         record.status = user.status.value
         record.registration_status = user.registration_status.value
+        record.first_seen_at = user.first_seen_at
+        record.last_seen_at = user.last_seen_at
         await self._session.flush()
         return self._to_domain(record)
 
@@ -105,4 +110,6 @@ class UserRepository(IUserRepository):
             warnings=record.warnings,
             status=UserStatus(record.status),
             registration_status=RegistrationStatus(record.registration_status),
+            first_seen_at=record.first_seen_at,
+            last_seen_at=record.last_seen_at,
         )
