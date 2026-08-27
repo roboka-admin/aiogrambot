@@ -17,9 +17,17 @@ from exceptions.user import UserNotFoundError
 from filters.admin import AdminFilter
 from keyboards.admin import admin_menu
 from keyboards.admin_cancel import admin_cancel_keyboard
-from keyboards.admin_stats import placeholder_stats_keyboard, stats_dashboard_keyboard, user_stats_keyboard
+from keyboards.admin_stats import (
+    placeholder_stats_keyboard,
+    stats_dashboard_keyboard,
+    user_stats_keyboard,
+)
 from keyboards.admin_user_actions import user_actions_keyboard
-from keyboards.admin_users import blocked_users_keyboard, user_management_keyboard, users_keyboard
+from keyboards.admin_users import (
+    blocked_users_keyboard,
+    user_management_keyboard,
+    users_keyboard,
+)
 from models.user import User, UserStatus
 from services.notification import NotificationService
 from services.user import UserService
@@ -35,93 +43,100 @@ _PAGE_SIZE = 5
 @router.message(Command("admin"))
 async def admin_handler(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await message.answer("👨‍💼 پنل مدیریت\n\nیکی از گزینه‌ها را انتخاب کنید:", reply_markup=admin_menu)
+    await message.answer(
+        "👨‍💼 پنل مدیریت\n\nیکی از گزینه‌ها را انتخاب کنید:",
+        reply_markup=admin_menu,
+    )
 
 
 @router.message(F.text == "📊 آمار")
 async def stats_dashboard_handler(message: Message) -> None:
-    await message.answer(
-        "📊 آمار و وضعیت\n\nیکی از گزینه‌ها را انتخاب کنید:",
-        reply_markup=stats_dashboard_keyboard(),
-    )
+    await _show_stats_dashboard(message=message, edit=False)
 
 
-@router.callback_query(AdminStatsCallback.filter(F.section == "dashboard"))
+@router.callback_query(
+    AdminStatsCallback.filter(F.section == "dashboard")
+)
 async def stats_dashboard_callback_handler(
     callback: CallbackQuery,
 ) -> None:
-    await callback.message.edit_text(
-        "📊 آمار و وضعیت\n\nیکی از گزینه‌ها را انتخاب کنید:",
-        reply_markup=stats_dashboard_keyboard(),
-    )
+    await _show_stats_dashboard(message=callback.message, edit=True)
     await callback.answer()
 
 
 @router.callback_query(AdminStatsCallback.filter(F.section == "users"))
 async def user_stats_handler(
-    callback: CallbackQuery, user_service: UserService
+    callback: CallbackQuery,
+    user_service: UserService,
 ) -> None:
-    stats = await user_service.get_user_statistics()
-    text = (
-        "👥 آمار کاربران\n\n"
-        f"👤 کل کاربران: {stats['total']:,}\n\n"
-        f"✅ ثبت‌نام‌شده: {stats['registered']:,}\n"
-        f"⏳ ثبت‌نام‌نشده: {stats['unregistered']:,}\n"
-        f"🚫 مسدود: {stats['blocked']:,}\n"
-        f"🟢 غیرمسدود: {stats['active']:,}\n\n"
-        "📅 فعالیت کاربران\n\n"
-        f"🟢 فعال امروز: {stats['active_today']:,}\n"
-        f"🟡 فعال ۷ روز اخیر: {stats['active_7d']:,}\n"
-        f"⚫ غیرفعال بیش از ۳۰ روز: {stats['inactive_30d']:,}"
-    )
-    await callback.message.edit_text(
-        text, reply_markup=user_stats_keyboard()
+    await _show_user_statistics(
+        message=callback.message,
+        user_service=user_service,
     )
     await callback.answer()
 
 
-@router.callback_query(AdminStatsCallback.filter(F.section.in_({"support", "broadcast", "antispam", "system"})))
+@router.callback_query(
+    AdminStatsCallback.filter(
+        F.section.in_({"support", "broadcast", "antispam", "system"})
+    )
+)
 async def placeholder_stats_handler(
-    callback: CallbackQuery, callback_data: AdminStatsCallback
+    callback: CallbackQuery,
+    callback_data: AdminStatsCallback,
 ) -> None:
-    await callback.message.edit_text(
-        "این بخش به‌زودی اضافه می‌شود.",
-        reply_markup=placeholder_stats_keyboard(callback_data.section),
+    await _show_placeholder_statistics(
+        message=callback.message,
+        section=callback_data.section,
     )
     await callback.answer()
 
 
 @router.callback_query(AdminStatsRefreshCallback.filter())
 async def stats_refresh_handler(
-    callback: CallbackQuery, callback_data: AdminStatsRefreshCallback, user_service: UserService
+    callback: CallbackQuery,
+    callback_data: AdminStatsRefreshCallback,
+    user_service: UserService,
 ) -> None:
     section = callback_data.section
+
     if section == "dashboard":
-        await stats_dashboard_callback_handler(callback)
+        await _show_stats_dashboard(message=callback.message, edit=True)
     elif section == "users":
-        await user_stats_handler(callback, user_service)
+        await _show_user_statistics(
+            message=callback.message,
+            user_service=user_service,
+        )
     else:
-        await placeholder_stats_handler(callback, AdminStatsCallback(section=section))
-    await callback.answer()
+        await _show_placeholder_statistics(
+            message=callback.message,
+            section=section,
+        )
 
-
-@router.callback_query(AdminStatsCallback.filter(F.section == "dashboard"))
-async def stats_back_to_admin_handler(callback: CallbackQuery) -> None:
-    # This is handled by the "⬅️ پنل مدیریت" button in stats_dashboard_keyboard which uses "admin_user_management"
-    pass
+    await callback.answer("بروزرسانی شد.")
 
 
 @router.message(AdminUserStates.waiting_for_user_id)
-async def find_user_handler(message: Message, state: FSMContext, user_service: UserService) -> None:
+async def find_user_handler(
+    message: Message,
+    state: FSMContext,
+    user_service: UserService,
+) -> None:
     text = (message.text or "").strip()
     if not text.isdigit():
-        await message.answer("❌ شناسه کاربر باید فقط شامل عدد باشد. دوباره ارسال کنید:", reply_markup=admin_cancel_keyboard)
+        await message.answer(
+            "❌ شناسه کاربر باید فقط شامل عدد باشد. دوباره ارسال کنید:",
+            reply_markup=admin_cancel_keyboard,
+        )
         return
 
     try:
         user = await user_service.get_user(int(text))
     except UserNotFoundError:
-        await message.answer("❌ کاربری با این شناسه پیدا نشد. دوباره تلاش کنید:", reply_markup=admin_cancel_keyboard)
+        await message.answer(
+            "❌ کاربری با این شناسه پیدا نشد. دوباره تلاش کنید:",
+            reply_markup=admin_cancel_keyboard,
+        )
         return
 
     await state.clear()
@@ -132,19 +147,41 @@ async def find_user_handler(message: Message, state: FSMContext, user_service: U
 
 
 @router.callback_query(AdminUsersCallback.filter())
-async def users_page_handler(callback: CallbackQuery, callback_data: AdminUsersCallback, user_service: UserService) -> None:
-    await _show_users_page(message=callback.message, user_service=user_service, page=callback_data.page, edit=True)
+async def users_page_handler(
+    callback: CallbackQuery,
+    callback_data: AdminUsersCallback,
+    user_service: UserService,
+) -> None:
+    await _show_users_page(
+        message=callback.message,
+        user_service=user_service,
+        page=callback_data.page,
+        edit=True,
+    )
     await callback.answer()
 
 
 @router.callback_query(AdminBlockedUsersCallback.filter())
-async def blocked_users_page_handler(callback: CallbackQuery, callback_data: AdminBlockedUsersCallback, user_service: UserService) -> None:
-    await _show_blocked_users_page(message=callback.message, user_service=user_service, page=callback_data.page, edit=True)
+async def blocked_users_page_handler(
+    callback: CallbackQuery,
+    callback_data: AdminBlockedUsersCallback,
+    user_service: UserService,
+) -> None:
+    await _show_blocked_users_page(
+        message=callback.message,
+        user_service=user_service,
+        page=callback_data.page,
+        edit=True,
+    )
     await callback.answer()
 
 
 @router.callback_query(AdminUserCallback.filter())
-async def user_details_handler(callback: CallbackQuery, callback_data: AdminUserCallback, user_service: UserService) -> None:
+async def user_details_handler(
+    callback: CallbackQuery,
+    callback_data: AdminUserCallback,
+    user_service: UserService,
+) -> None:
     try:
         user = await user_service.get_user(callback_data.telegram_id)
     except UserNotFoundError:
@@ -153,13 +190,23 @@ async def user_details_handler(callback: CallbackQuery, callback_data: AdminUser
 
     await callback.message.edit_text(
         _user_details_text(user),
-        reply_markup=user_actions_keyboard(user, source=callback_data.source, page=callback_data.page),
+        reply_markup=user_actions_keyboard(
+            user,
+            source=callback_data.source,
+            page=callback_data.page,
+        ),
     )
     await callback.answer()
 
 
-@router.callback_query(AdminUserActionCallback.filter(F.action.in_({"add_coin", "remove_coin"})))
-async def coin_action_start_handler(callback: CallbackQuery, callback_data: AdminUserActionCallback, state: FSMContext) -> None:
+@router.callback_query(
+    AdminUserActionCallback.filter(F.action.in_({"add_coin", "remove_coin"}))
+)
+async def coin_action_start_handler(
+    callback: CallbackQuery,
+    callback_data: AdminUserActionCallback,
+    state: FSMContext,
+) -> None:
     await state.set_state(AdminUserStates.waiting_for_coin_amount)
     await state.update_data(
         coin_action=callback_data.action,
@@ -167,16 +214,31 @@ async def coin_action_start_handler(callback: CallbackQuery, callback_data: Admi
         source=callback_data.source,
         page=callback_data.page,
     )
-    action_text = "افزایش" if callback_data.action == "add_coin" else "کاهش"
-    await callback.message.answer(f"➖➕ مقدار {action_text} سکه را به صورت عدد ارسال کنید:", reply_markup=admin_cancel_keyboard)
+    action_text = (
+        "افزایش"
+        if callback_data.action == "add_coin"
+        else "کاهش"
+    )
+    await callback.message.answer(
+        f"➖➕ مقدار {action_text} سکه را به صورت عدد ارسال کنید:",
+        reply_markup=admin_cancel_keyboard,
+    )
     await callback.answer()
 
 
 @router.message(AdminUserStates.waiting_for_coin_amount)
-async def coin_amount_handler(message: Message, state: FSMContext, user_service: UserService, notification_service: NotificationService) -> None:
+async def coin_amount_handler(
+    message: Message,
+    state: FSMContext,
+    user_service: UserService,
+    notification_service: NotificationService,
+) -> None:
     text = (message.text or "").strip()
     if not text.isdigit() or int(text) <= 0:
-        await message.answer("❌ مقدار باید یک عدد صحیح بزرگ‌تر از صفر باشد. دوباره ارسال کنید:", reply_markup=admin_cancel_keyboard)
+        await message.answer(
+            "❌ مقدار باید یک عدد صحیح بزرگ‌تر از صفر باشد. دوباره ارسال کنید:",
+            reply_markup=admin_cancel_keyboard,
+        )
         return
 
     data = await state.get_data()
@@ -187,17 +249,29 @@ async def coin_amount_handler(message: Message, state: FSMContext, user_service:
 
     if data["coin_action"] == "add_coin":
         user = await user_service.add_coins(telegram_id, amount)
-        await notification_service.coins_added(telegram_id, amount, user.coins)
+        await notification_service.coins_added(
+            telegram_id,
+            amount,
+            user.coins,
+        )
         notice = f"✅ {amount} سکه اضافه شد."
     else:
         user = await user_service.remove_coins(telegram_id, amount)
-        await notification_service.coins_removed(telegram_id, amount, user.coins)
+        await notification_service.coins_removed(
+            telegram_id,
+            amount,
+            user.coins,
+        )
         notice = f"✅ {amount} سکه کم شد."
 
     await state.clear()
     await message.answer(
         f"{notice}\n\n{_user_details_text(user)}",
-        reply_markup=user_actions_keyboard(user, source=source, page=page),
+        reply_markup=user_actions_keyboard(
+            user,
+            source=source,
+            page=page,
+        ),
     )
 
 
@@ -217,7 +291,10 @@ async def user_action_handler(
         if user.status is UserStatus.BLOCKED:
             await notification_service.user_auto_blocked(telegram_id)
         else:
-            await notification_service.warning_added(telegram_id, user.warnings)
+            await notification_service.warning_added(
+                telegram_id,
+                user.warnings,
+            )
     elif action == "block":
         user = await user_service.block_user(telegram_id)
         notice = "کاربر مسدود شد."
@@ -242,7 +319,11 @@ async def user_action_handler(
 
     await callback.message.edit_text(
         _user_details_text(user),
-        reply_markup=user_actions_keyboard(user, source=callback_data.source, page=callback_data.page),
+        reply_markup=user_actions_keyboard(
+            user,
+            source=callback_data.source,
+            page=callback_data.page,
+        ),
     )
     await callback.answer(notice)
 
@@ -253,12 +334,69 @@ async def noop_handler(callback: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data == "admin_blocked_users")
-async def blocked_users_start_handler(callback: CallbackQuery, user_service: UserService) -> None:
-    await _show_blocked_users_page(message=callback.message, user_service=user_service, page=0, edit=True)
+async def blocked_users_start_handler(
+    callback: CallbackQuery,
+    user_service: UserService,
+) -> None:
+    await _show_blocked_users_page(
+        message=callback.message,
+        user_service=user_service,
+        page=0,
+        edit=True,
+    )
     await callback.answer()
 
 
-async def _show_user_management(*, message: Message, edit: bool = False) -> None:
+async def _show_stats_dashboard(
+    *,
+    message: Message,
+    edit: bool,
+) -> None:
+    text = "📊 آمار و وضعیت\n\nیکی از گزینه‌ها را انتخاب کنید:"
+    keyboard = stats_dashboard_keyboard()
+    if edit:
+        await message.edit_text(text, reply_markup=keyboard)
+    else:
+        await message.answer(text, reply_markup=keyboard)
+
+
+async def _show_user_statistics(
+    *,
+    message: Message,
+    user_service: UserService,
+) -> None:
+    stats = await user_service.get_user_statistics()
+    text = (
+        "👥 آمار کاربران\n\n"
+        f"👤 کل کاربران: {stats['total']:,}\n\n"
+        f"✅ ثبت‌نام‌شده: {stats['registered']:,}\n"
+        f"⏳ ثبت‌نام‌نشده: {stats['unregistered']:,}\n"
+        f"🚫 مسدود: {stats['blocked']:,}\n"
+        f"🟢 غیرمسدود: {stats['active']:,}\n\n"
+        "📅 فعالیت کاربران\n\n"
+        f"🟢 فعال امروز: {stats['active_today']:,}\n"
+        f"🟡 فعال ۷ روز اخیر: {stats['active_7d']:,}\n"
+        f"⚫ غیرفعال بیش از ۳۰ روز: {stats['inactive_30d']:,}"
+    )
+    await message.edit_text(text, reply_markup=user_stats_keyboard())
+
+
+async def _show_placeholder_statistics(
+    *,
+    message: Message,
+    section: str,
+) -> None:
+    await message.edit_text(
+        "این بخش به‌زودی اضافه می‌شود.",
+        reply_markup=placeholder_stats_keyboard(section),
+    )
+
+
+async def _show_user_management(
+    *,
+    message: Message,
+    edit: bool = False,
+) -> None:
     text = "👥 مدیریت کاربران\n\nیکی از گزینه‌ها را انتخاب کنید:"
     keyboard = user_management_keyboard()
     if edit:
@@ -267,10 +405,23 @@ async def _show_user_management(*, message: Message, edit: bool = False) -> None
         await message.answer(text, reply_markup=keyboard)
 
 
-async def _show_users_page(*, message: Message, user_service: UserService, page: int, edit: bool = False) -> None:
-    users, total, page = await user_service.get_users_page(page=page, page_size=_PAGE_SIZE)
+async def _show_users_page(
+    *,
+    message: Message,
+    user_service: UserService,
+    page: int,
+    edit: bool = False,
+) -> None:
+    users, total, page = await user_service.get_users_page(
+        page=page,
+        page_size=_PAGE_SIZE,
+    )
     total_pages = max(ceil(total / _PAGE_SIZE), 1)
-    keyboard = users_keyboard(users=users, page=page, total_pages=total_pages)
+    keyboard = users_keyboard(
+        users=users,
+        page=page,
+        total_pages=total_pages,
+    )
 
     if total == 0:
         text = "👤 کاربران\n\nهنوز کاربری ثبت‌نام نکرده است."
@@ -287,10 +438,23 @@ async def _show_users_page(*, message: Message, user_service: UserService, page:
         await message.answer(text, reply_markup=keyboard)
 
 
-async def _show_blocked_users_page(*, message: Message, user_service: UserService, page: int, edit: bool = False) -> None:
-    users, total, page = await user_service.get_blocked_users_page(page=page, page_size=_PAGE_SIZE)
+async def _show_blocked_users_page(
+    *,
+    message: Message,
+    user_service: UserService,
+    page: int,
+    edit: bool = False,
+) -> None:
+    users, total, page = await user_service.get_blocked_users_page(
+        page=page,
+        page_size=_PAGE_SIZE,
+    )
     total_pages = max(ceil(total / _PAGE_SIZE), 1)
-    keyboard = blocked_users_keyboard(users=users, page=page, total_pages=total_pages)
+    keyboard = blocked_users_keyboard(
+        users=users,
+        page=page,
+        total_pages=total_pages,
+    )
 
     if total == 0:
         text = "🚫 کاربران مسدود\n\nهیچ کاربر مسدودی وجود ندارد."
