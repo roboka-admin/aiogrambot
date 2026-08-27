@@ -1,6 +1,7 @@
+from datetime import timedelta
 from math import ceil
 
-from core.timezone import tehran_now
+from core.timezone import TEHRAN_TZ, tehran_now
 from exceptions.user import UserNotFoundError
 from models.user import RegistrationStatus, User, UserStatus
 from repositories.interfaces.user import IUserRepository
@@ -44,6 +45,32 @@ class UserService:
             "registered": await self._user_repository.count_registered(),
             "unregistered": await self._user_repository.count_unregistered(),
             "blocked": await self._user_repository.count_blocked(),
+        }
+
+    async def get_user_statistics(self) -> dict[str, int]:
+        now = tehran_now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        seven_days_ago = today_start - timedelta(days=7)
+        thirty_days_ago = today_start - timedelta(days=30)
+
+        total = await self._user_repository.count()
+        registered = await self._user_repository.count_registered()
+        unregistered = await self._user_repository.count_unregistered()
+        blocked = await self._user_repository.count_blocked()
+        active = await self._user_repository.count_active()
+        active_today = await self._user_repository.count_active_today(today_start)
+        active_7d = await self._user_repository.count_active_last_7_days(seven_days_ago)
+        inactive_30d = await self._user_repository.count_inactive_30_days(thirty_days_ago)
+
+        return {
+            "total": total,
+            "registered": registered,
+            "unregistered": unregistered,
+            "blocked": blocked,
+            "active": active,
+            "active_today": active_today,
+            "active_7d": active_7d,
+            "inactive_30d": inactive_30d,
         }
 
     async def update_name(self, telegram_id: int, name: str) -> User:

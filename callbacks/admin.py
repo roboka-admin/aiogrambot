@@ -41,3 +41,11 @@ class AdminBroadcastCancelCallback(CallbackData, prefix="admin_broadcast_cancel"
 
 class AdminBlockedUsersCallback(CallbackData, prefix="admin_blocked_users"):
     page: int
+
+
+class AdminStatsCallback(CallbackData, prefix="admin_stats"):
+    section: str
+
+
+class AdminStatsRefreshCallback(CallbackData, prefix="admin_stats_refresh"):
+    section: str

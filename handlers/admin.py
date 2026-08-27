@@ -7,6 +7,8 @@ from aiogram.types import CallbackQuery, Message
 
 from callbacks.admin import (
     AdminBlockedUsersCallback,
+    AdminStatsCallback,
+    AdminStatsRefreshCallback,
     AdminUserActionCallback,
     AdminUserCallback,
     AdminUsersCallback,
@@ -15,6 +17,7 @@ from exceptions.user import UserNotFoundError
 from filters.admin import AdminFilter
 from keyboards.admin import admin_menu
 from keyboards.admin_cancel import admin_cancel_keyboard
+from keyboards.admin_stats import placeholder_stats_keyboard, stats_dashboard_keyboard, user_stats_keyboard
 from keyboards.admin_user_actions import user_actions_keyboard
 from keyboards.admin_users import blocked_users_keyboard, user_management_keyboard, users_keyboard
 from models.user import User, UserStatus
@@ -35,36 +38,77 @@ async def admin_handler(message: Message, state: FSMContext) -> None:
     await message.answer("👨‍💼 پنل مدیریت\n\nیکی از گزینه‌ها را انتخاب کنید:", reply_markup=admin_menu)
 
 
-@router.message(F.text == "👤 کاربران")
-async def users_handler(message: Message) -> None:
-    await _show_user_management(message=message)
+@router.message(F.text == "📊 آمار")
+async def stats_dashboard_handler(message: Message) -> None:
+    await message.answer(
+        "📊 آمار و وضعیت\n\nیکی از گزینه‌ها را انتخاب کنید:",
+        reply_markup=stats_dashboard_keyboard(),
+    )
 
 
-@router.callback_query(F.data == "admin_user_management")
-async def user_management_handler(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
-    await _show_user_management(message=callback.message, edit=True)
+@router.callback_query(AdminStatsCallback.filter(F.section == "dashboard"))
+async def stats_dashboard_callback_handler(
+    callback: CallbackQuery,
+) -> None:
+    await callback.message.edit_text(
+        "📊 آمار و وضعیت\n\nیکی از گزینه‌ها را انتخاب کنید:",
+        reply_markup=stats_dashboard_keyboard(),
+    )
     await callback.answer()
 
 
-@router.callback_query(F.data == "admin_browse_users")
-async def browse_users_handler(callback: CallbackQuery, user_service: UserService) -> None:
-    await _show_users_page(message=callback.message, user_service=user_service, page=0, edit=True)
+@router.callback_query(AdminStatsCallback.filter(F.section == "users"))
+async def user_stats_handler(
+    callback: CallbackQuery, user_service: UserService
+) -> None:
+    stats = await user_service.get_user_statistics()
+    text = (
+        "👥 آمار کاربران\n\n"
+        f"👤 کل کاربران: {stats['total']:,}\n\n"
+        f"✅ ثبت‌نام‌شده: {stats['registered']:,}\n"
+        f"⏳ ثبت‌نام‌نشده: {stats['unregistered']:,}\n"
+        f"🚫 مسدود: {stats['blocked']:,}\n"
+        f"🟢 غیرمسدود: {stats['active']:,}\n\n"
+        "📅 فعالیت کاربران\n\n"
+        f"🟢 فعال امروز: {stats['active_today']:,}\n"
+        f"🟡 فعال ۷ روز اخیر: {stats['active_7d']:,}\n"
+        f"⚫ غیرفعال بیش از ۳۰ روز: {stats['inactive_30d']:,}"
+    )
+    await callback.message.edit_text(
+        text, reply_markup=user_stats_keyboard()
+    )
     await callback.answer()
 
 
-@router.callback_query(F.data == "admin_find_user")
-async def find_user_start_handler(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.set_state(AdminUserStates.waiting_for_user_id)
-    await callback.message.answer("🔎 شناسه عددی کاربر را ارسال کنید:", reply_markup=admin_cancel_keyboard)
+@router.callback_query(AdminStatsCallback.filter(F.section.in_({"support", "broadcast", "antispam", "system"})))
+async def placeholder_stats_handler(
+    callback: CallbackQuery, callback_data: AdminStatsCallback
+) -> None:
+    await callback.message.edit_text(
+        "این بخش به‌زودی اضافه می‌شود.",
+        reply_markup=placeholder_stats_keyboard(callback_data.section),
+    )
     await callback.answer()
 
 
-@router.callback_query(F.data == "admin_cancel")
-async def admin_cancel_handler(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
-    await _show_user_management(message=callback.message, edit=True)
-    await callback.answer("عملیات لغو شد.")
+@router.callback_query(AdminStatsRefreshCallback.filter())
+async def stats_refresh_handler(
+    callback: CallbackQuery, callback_data: AdminStatsRefreshCallback, user_service: UserService
+) -> None:
+    section = callback_data.section
+    if section == "dashboard":
+        await stats_dashboard_callback_handler(callback)
+    elif section == "users":
+        await user_stats_handler(callback, user_service)
+    else:
+        await placeholder_stats_handler(callback, AdminStatsCallback(section=section))
+    await callback.answer()
+
+
+@router.callback_query(AdminStatsCallback.filter(F.section == "dashboard"))
+async def stats_back_to_admin_handler(callback: CallbackQuery) -> None:
+    # This is handled by the "⬅️ پنل مدیریت" button in stats_dashboard_keyboard which uses "admin_user_management"
+    pass
 
 
 @router.message(AdminUserStates.waiting_for_user_id)

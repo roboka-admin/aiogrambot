@@ -77,12 +77,33 @@ class UserRepository(IUserRepository):
     async def count_unregistered(self) -> int:
         return await self._count_where(UserRecord.registration_status == RegistrationStatus.UNREGISTERED.value)
 
-    async def _count_where(self, condition=None) -> int:
+    async def _count_where(self, *conditions) -> int:
         statement = select(func.count()).select_from(UserRecord)
-        if condition is not None:
+        for condition in conditions:
             statement = statement.where(condition)
         result = await self._session.execute(statement)
         return result.scalar_one()
+
+    async def count_active(self) -> int:
+        return await self._count_where(UserRecord.status == UserStatus.ACTIVE.value)
+
+    async def count_active_today(self, today_start: datetime) -> int:
+        return await self._count_where(
+            UserRecord.last_seen_at.is_not(None),
+            UserRecord.last_seen_at >= today_start,
+        )
+
+    async def count_active_last_7_days(self, seven_days_ago: datetime) -> int:
+        return await self._count_where(
+            UserRecord.last_seen_at.is_not(None),
+            UserRecord.last_seen_at >= seven_days_ago,
+        )
+
+    async def count_inactive_30_days(self, thirty_days_ago: datetime) -> int:
+        return await self._count_where(
+            UserRecord.last_seen_at.is_not(None),
+            UserRecord.last_seen_at < thirty_days_ago,
+        )
 
     async def list_active_telegram_ids(self, *, registered_only: bool = False) -> list[int]:
         statement = select(UserRecord.telegram_id).where(UserRecord.status == UserStatus.ACTIVE.value)
