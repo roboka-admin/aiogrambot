@@ -1,7 +1,9 @@
 from datetime import datetime
+
 from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
 
+from core.timezone import tehran_now
 from models.base import Base
 from models.user import RegistrationStatus, UserStatus
 
@@ -20,5 +22,5 @@ class UserRecord(Base):
     registration_status: Mapped[str] = mapped_column(
         String(20), default=RegistrationStatus.UNREGISTERED.value
     )
-    first_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=tehran_now)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=tehran_now)
