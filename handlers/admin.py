@@ -473,6 +473,10 @@ async def _show_broadcast_statistics(
         text = (
             "📢 آمار همگانی\n\n"
             f"📨 کل ارسال‌ها: {stats['total_broadcasts']:,}\n\n"
+            "📅 فعالیت ارسال‌ها\n\n"
+            f"📝 امروز: {stats['today']:,}\n"
+            f"📝 ۷ روز اخیر: {stats['last_7_days']:,}\n"
+            f"📝 ۳۰ روز اخیر: {stats['last_30_days']:,}\n\n"
             "📊 آخرین ارسال\n\n"
             f"👥 تعداد دریافت‌کنندگان: {stats['latest_total_recipients']:,}\n"
             f"✅ موفق: {stats['latest_success']:,}\n"
