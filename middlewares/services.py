@@ -4,10 +4,12 @@ from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
 from core.database import Database
+from repositories.antispam import AntiSpamRepository
 from repositories.broadcast import BroadcastRepository
 from repositories.interfaces.broadcast import IBroadcastRepository
 from repositories.support import SupportRepository
 from repositories.user import UserRepository
+from services.antispam import AntiSpamService
 from services.broadcast import BroadcastService
 from services.notification import NotificationService
 from services.register import RegisterService
@@ -35,6 +37,7 @@ class ServicesMiddleware(BaseMiddleware):
                 user_repository = UserRepository(session)
                 support_repository = SupportRepository(session)
                 broadcast_repository = BroadcastRepository(session)
+                antispam_repository = AntiSpamRepository(session)
 
                 register_service = RegisterService(
                     user_repository=user_repository,
@@ -50,12 +53,16 @@ class ServicesMiddleware(BaseMiddleware):
                     broadcast_repository=broadcast_repository,
                     bot=data["bot"],
                 )
+                antispam_service = AntiSpamService(
+                    antispam_repository=antispam_repository,
+                )
                 notification_service = NotificationService(bot=data["bot"])
 
                 data["register_service"] = register_service
                 data["user_service"] = user_service
                 data["support_service"] = support_service
                 data["broadcast_service"] = broadcast_service
+                data["antispam_service"] = antispam_service
                 data["notification_service"] = notification_service
 
                 return await handler(event, data)

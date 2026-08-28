@@ -18,6 +18,7 @@ from filters.admin import AdminFilter
 from keyboards.admin import admin_menu
 from keyboards.admin_cancel import admin_cancel_keyboard
 from keyboards.admin_stats import (
+    antispam_stats_keyboard,
     broadcast_stats_keyboard,
     placeholder_stats_keyboard,
     stats_dashboard_keyboard,
@@ -31,6 +32,7 @@ from keyboards.admin_users import (
     users_keyboard,
 )
 from models.user import User, UserStatus
+from services.antispam import AntiSpamService
 from services.broadcast import BroadcastService
 from services.notification import NotificationService
 from services.support import SupportService
@@ -104,9 +106,21 @@ async def broadcast_stats_handler(
     await callback.answer()
 
 
+@router.callback_query(AdminStatsCallback.filter(F.section == "antispam"))
+async def antispam_stats_handler(
+    callback: CallbackQuery,
+    antispam_service: AntiSpamService,
+) -> None:
+    await _show_antispam_statistics(
+        message=callback.message,
+        antispam_service=antispam_service,
+    )
+    await callback.answer()
+
+
 @router.callback_query(
     AdminStatsCallback.filter(
-        F.section.in_({"antispam", "system"})
+        F.section.in_({"system"})
     )
 )
 async def placeholder_stats_handler(
@@ -127,6 +141,7 @@ async def stats_refresh_handler(
     user_service: UserService,
     support_service: SupportService,
     broadcast_service: BroadcastService,
+    antispam_service: AntiSpamService,
 ) -> None:
     section = callback_data.section
 
@@ -146,6 +161,11 @@ async def stats_refresh_handler(
         await _show_broadcast_statistics(
             message=callback.message,
             broadcast_service=broadcast_service,
+        )
+    elif section == "antispam":
+        await _show_antispam_statistics(
+            message=callback.message,
+            antispam_service=antispam_service,
         )
     else:
         await _show_placeholder_statistics(
@@ -487,6 +507,24 @@ async def _show_broadcast_statistics(
         )
 
     await message.edit_text(text, reply_markup=broadcast_stats_keyboard())
+
+
+async def _show_antispam_statistics(
+    *,
+    message: Message,
+    antispam_service: AntiSpamService,
+) -> None:
+    stats = await antispam_service.get_antispam_statistics()
+    text = (
+        "🛡️ آمار ضداسپم\n\n"
+        f"⚠️ کل اخطارها: {stats['total_warnings']:,}\n"
+        f"🚫 کل مسدودشدگان: {stats['total_blocks']:,}\n\n"
+        "📅 فعالیت ضداسپم\n\n"
+        f"📝 امروز: {stats['today']:,}\n"
+        f"📝 ۷ روز اخیر: {stats['last_7_days']:,}\n"
+        f"📝 ۳۰ روز اخیر: {stats['last_30_days']:,}"
+    )
+    await message.edit_text(text, reply_markup=antispam_stats_keyboard())
 
 
 async def _show_placeholder_statistics(

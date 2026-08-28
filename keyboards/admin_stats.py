@@ -66,6 +66,10 @@ def broadcast_stats_keyboard() -> InlineKeyboardMarkup:
     return _stats_page_keyboard("broadcast")
 
 
+def antispam_stats_keyboard() -> InlineKeyboardMarkup:
+    return _stats_page_keyboard("antispam")
+
+
 def placeholder_stats_keyboard(section: str) -> InlineKeyboardMarkup:
     """Keyboard for statistics sections that are not implemented yet."""
     return _stats_page_keyboard(section)

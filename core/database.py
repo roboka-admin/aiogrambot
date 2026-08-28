@@ -16,11 +16,12 @@ class Database:
             yield session
 
     async def create_tables(self) -> None:
+        from models.antispam_db import AntiSpamEventRecord
         from models.base import Base
         from models.broadcast_db import BroadcastRecordRecord
         from models.support_db import SupportTicketRecord
         from models.user_db import UserRecord
-        _ = UserRecord, SupportTicketRecord, BroadcastRecordRecord
+        _ = UserRecord, SupportTicketRecord, BroadcastRecordRecord, AntiSpamEventRecord
         async with self.engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
             await self._migrate_users(connection)

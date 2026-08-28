@@ -9,6 +9,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message
 
 from config import ADMIN_IDS
+from services.antispam import AntiSpamService
 from services.user import UserService
 
 MAX_UPDATES = 5
@@ -80,9 +81,10 @@ class SpamState:
 class AntiSpamMiddleware(BaseMiddleware):
     """Protect one observer with independent per-user in-memory rate limits."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, antispam_service: AntiSpamService | None = None) -> None:
         self._states: dict[int, SpamState] = {}
         self._last_cleanup_at = 0.0
+        self._antispam_service = antispam_service
 
     def _cleanup_if_needed(self, now: float) -> None:
         if now - self._last_cleanup_at < CLEANUP_INTERVAL_SECONDS:
@@ -121,6 +123,10 @@ class AntiSpamMiddleware(BaseMiddleware):
             return False
 
         await user_service.block_user(user_id)
+
+        if self._antispam_service:
+            await self._antispam_service.record_block(user_id)
+
         return True
 
     async def __call__(
@@ -132,6 +138,9 @@ class AntiSpamMiddleware(BaseMiddleware):
         user_id = event.from_user.id
         if user_id in ADMIN_IDS:
             return await handler(event, data)
+
+        if self._antispam_service is None:
+            self._antispam_service = data.get("antispam_service")
 
         now = time.monotonic()
         self._cleanup_if_needed(now)
@@ -146,6 +155,9 @@ class AntiSpamMiddleware(BaseMiddleware):
 
         if not state.allow(now):
             violation_level, duration = state.apply_violation(now)
+
+            if self._antispam_service:
+                await self._antispam_service.record_warning(user_id)
 
             if violation_level >= MAX_SPAM_VIOLATIONS:
                 user_service: UserService = data["user_service"]
