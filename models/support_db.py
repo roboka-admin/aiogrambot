@@ -1,7 +1,9 @@
 from datetime import datetime
+
 from sqlalchemy import BigInteger, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
 
+from core.timezone import tehran_now
 from models.base import Base
 from models.support import SupportStatus
 
@@ -20,5 +22,7 @@ class SupportTicketRecord(Base):
         index=True,
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=True),
+        default=tehran_now,
+        nullable=False,
     )
