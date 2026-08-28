@@ -1,5 +1,6 @@
 """Temporary in-memory anti-spam protection for messages and callbacks."""
 
+import logging
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -11,6 +12,8 @@ from aiogram.types import CallbackQuery, Message
 from config import ADMIN_IDS
 from services.antispam import AntiSpamService
 from services.user import UserService
+
+logger = logging.getLogger(__name__)
 
 MAX_UPDATES = 5
 WINDOW_SECONDS = 3.0
@@ -25,7 +28,7 @@ BLOCKED_MESSAGE = "🚫 به دلیل ارسال پیام‌های مکرر و �
 
 @dataclass(slots=True)
 class SpamState:
-    """Rate-limit state for one user and one event type."""
+    """Rate-limit state for one user."""
 
     timestamps: Deque[float] = field(default_factory=deque)
     violation_level: int = 0
@@ -81,10 +84,9 @@ class SpamState:
 class AntiSpamMiddleware(BaseMiddleware):
     """Protect one observer with independent per-user in-memory rate limits."""
 
-    def __init__(self, *, antispam_service: AntiSpamService | None = None) -> None:
+    def __init__(self) -> None:
         self._states: dict[int, SpamState] = {}
         self._last_cleanup_at = 0.0
-        self._antispam_service = antispam_service
 
     def _cleanup_if_needed(self, now: float) -> None:
         if now - self._last_cleanup_at < CLEANUP_INTERVAL_SECONDS:
@@ -113,19 +115,35 @@ class AntiSpamMiddleware(BaseMiddleware):
         else:
             await event.answer(BLOCKED_MESSAGE)
 
+    async def _record_warning(
+        self,
+        antispam_service: AntiSpamService | None,
+        user_id: int,
+    ) -> None:
+        if antispam_service is None:
+            return
+        try:
+            await antispam_service.record_warning(user_id)
+        except Exception:
+            logger.exception("Failed to record anti-spam warning for user %s", user_id)
+
     async def _block_user(
         self,
         *,
         user_id: int,
         user_service: UserService,
+        antispam_service: AntiSpamService | None,
     ) -> bool:
         if not await user_service.exists(user_id):
             return False
 
         await user_service.block_user(user_id)
 
-        if self._antispam_service:
-            await self._antispam_service.record_block(user_id)
+        if antispam_service is not None:
+            try:
+                await antispam_service.record_block(user_id)
+            except Exception:
+                logger.exception("Failed to record anti-spam block for user %s", user_id)
 
         return True
 
@@ -139,9 +157,7 @@ class AntiSpamMiddleware(BaseMiddleware):
         if user_id in ADMIN_IDS:
             return await handler(event, data)
 
-        if self._antispam_service is None:
-            self._antispam_service = data.get("antispam_service")
-
+        antispam_service: AntiSpamService | None = data.get("antispam_service")
         now = time.monotonic()
         self._cleanup_if_needed(now)
 
@@ -156,14 +172,14 @@ class AntiSpamMiddleware(BaseMiddleware):
         if not state.allow(now):
             violation_level, duration = state.apply_violation(now)
 
-            if self._antispam_service:
-                await self._antispam_service.record_warning(user_id)
+            await self._record_warning(antispam_service, user_id)
 
             if violation_level >= MAX_SPAM_VIOLATIONS:
                 user_service: UserService = data["user_service"]
                 was_blocked = await self._block_user(
                     user_id=user_id,
                     user_service=user_service,
+                    antispam_service=antispam_service,
                 )
                 self._states.pop(user_id, None)
 
