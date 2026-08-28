@@ -1,11 +1,11 @@
 from datetime import datetime
-from enum import Enum
 
-from sqlalchemy import BigInteger, DateTime, Enum as SQLEnum, Integer
+from sqlalchemy import BigInteger, DateTime, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
-from models.base import Base
+from core.timezone import tehran_now
 from models.antispam import AntiSpamEventType
+from models.base import Base
 
 
 class AntiSpamEventRecord(Base):
@@ -22,5 +22,6 @@ class AntiSpamEventRecord(Base):
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
+        default=tehran_now,
         nullable=False,
     )
