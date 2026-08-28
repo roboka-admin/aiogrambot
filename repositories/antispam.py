@@ -1,4 +1,5 @@
 from datetime import datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,44 +24,41 @@ class AntiSpamRepository(IAntiSpamRepository):
 
     async def count_total_warnings(self) -> int:
         result = await self._session.execute(
-            select(func.count()).select_from(AntiSpamEventRecord).where(
-                AntiSpamEventRecord.event_type == AntiSpamEventType.WARNING.value
-            )
+            select(func.count())
+            .select_from(AntiSpamEventRecord)
+            .where(AntiSpamEventRecord.event_type == AntiSpamEventType.WARNING)
         )
         return result.scalar_one()
 
     async def count_total_blocks(self) -> int:
         result = await self._session.execute(
-            select(func.count()).select_from(AntiSpamEventRecord).where(
-                AntiSpamEventRecord.event_type == AntiSpamEventType.BLOCK.value
-            )
+            select(func.count())
+            .select_from(AntiSpamEventRecord)
+            .where(AntiSpamEventRecord.event_type == AntiSpamEventType.BLOCK)
         )
         return result.scalar_one()
 
     async def count_today(self, today_start: datetime) -> int:
         result = await self._session.execute(
-            select(func.count()).select_from(AntiSpamEventRecord).where(
-                AntiSpamEventRecord.created_at.is_not(None),
-                AntiSpamEventRecord.created_at >= today_start,
-            )
+            select(func.count())
+            .select_from(AntiSpamEventRecord)
+            .where(AntiSpamEventRecord.created_at >= today_start)
         )
         return result.scalar_one()
 
     async def count_last_7_days(self, seven_days_ago: datetime) -> int:
         result = await self._session.execute(
-            select(func.count()).select_from(AntiSpamEventRecord).where(
-                AntiSpamEventRecord.created_at.is_not(None),
-                AntiSpamEventRecord.created_at >= seven_days_ago,
-            )
+            select(func.count())
+            .select_from(AntiSpamEventRecord)
+            .where(AntiSpamEventRecord.created_at >= seven_days_ago)
         )
         return result.scalar_one()
 
     async def count_last_30_days(self, thirty_days_ago: datetime) -> int:
         result = await self._session.execute(
-            select(func.count()).select_from(AntiSpamEventRecord).where(
-                AntiSpamEventRecord.created_at.is_not(None),
-                AntiSpamEventRecord.created_at >= thirty_days_ago,
-            )
+            select(func.count())
+            .select_from(AntiSpamEventRecord)
+            .where(AntiSpamEventRecord.created_at >= thirty_days_ago)
         )
         return result.scalar_one()
 
