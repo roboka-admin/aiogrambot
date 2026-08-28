@@ -1,3 +1,6 @@
+from datetime import timedelta
+
+from core.timezone import tehran_now
 from models.support import SupportStatus, SupportTicket, SupportUserSummary
 from repositories.interfaces.support import ISupportRepository
 
@@ -45,3 +48,23 @@ class SupportService:
 
     async def delete_all_tickets(self) -> int:
         return await self._support_repository.delete_all()
+
+    async def get_support_statistics(self) -> dict[str, int]:
+        now = tehran_now()
+        today_start = now.replace(
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+        seven_days_ago = today_start - timedelta(days=7)
+        thirty_days_ago = today_start - timedelta(days=30)
+
+        return {
+            "total": await self._support_repository.count_total(),
+            "open": await self._support_repository.count_by_status(SupportStatus.OPEN),
+            "closed": await self._support_repository.count_by_status(SupportStatus.CLOSED),
+            "today": await self._support_repository.count_today(today_start),
+            "last_7_days": await self._support_repository.count_last_7_days(seven_days_ago),
+            "last_30_days": await self._support_repository.count_last_30_days(thirty_days_ago),
+        }

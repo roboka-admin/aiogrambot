@@ -30,6 +30,16 @@ def user_stats_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
+def support_stats_keyboard() -> InlineKeyboardMarkup:
+    """Support statistics keyboard with refresh and back buttons."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🔄 بروزرسانی", callback_data=AdminStatsRefreshCallback(section="support").pack()),
+            InlineKeyboardButton(text="⬅️ آمار و وضعیت", callback_data=AdminStatsCallback(section="dashboard").pack()),
+        ],
+    ])
+
+
 def placeholder_stats_keyboard(section: str) -> InlineKeyboardMarkup:
     """Placeholder keyboard for unimplemented statistics sections."""
     return InlineKeyboardMarkup(inline_keyboard=[

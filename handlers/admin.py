@@ -20,6 +20,7 @@ from keyboards.admin_cancel import admin_cancel_keyboard
 from keyboards.admin_stats import (
     placeholder_stats_keyboard,
     stats_dashboard_keyboard,
+    support_stats_keyboard,
     user_stats_keyboard,
 )
 from keyboards.admin_user_actions import user_actions_keyboard
@@ -30,6 +31,7 @@ from keyboards.admin_users import (
 )
 from models.user import User, UserStatus
 from services.notification import NotificationService
+from services.support import SupportService
 from services.user import UserService
 from states.admin import AdminUserStates
 
@@ -76,9 +78,21 @@ async def user_stats_handler(
     await callback.answer()
 
 
+@router.callback_query(AdminStatsCallback.filter(F.section == "support"))
+async def support_stats_handler(
+    callback: CallbackQuery,
+    support_service: SupportService,
+) -> None:
+    await _show_support_statistics(
+        message=callback.message,
+        support_service=support_service,
+    )
+    await callback.answer()
+
+
 @router.callback_query(
     AdminStatsCallback.filter(
-        F.section.in_({"support", "broadcast", "antispam", "system"})
+        F.section.in_({"broadcast", "antispam", "system"})
     )
 )
 async def placeholder_stats_handler(
@@ -97,6 +111,7 @@ async def stats_refresh_handler(
     callback: CallbackQuery,
     callback_data: AdminStatsRefreshCallback,
     user_service: UserService,
+    support_service: SupportService,
 ) -> None:
     section = callback_data.section
 
@@ -106,6 +121,11 @@ async def stats_refresh_handler(
         await _show_user_statistics(
             message=callback.message,
             user_service=user_service,
+        )
+    elif section == "support":
+        await _show_support_statistics(
+            message=callback.message,
+            support_service=support_service,
         )
     else:
         await _show_placeholder_statistics(
@@ -379,6 +399,25 @@ async def _show_user_statistics(
         f"⚫ غیرفعال بیش از ۳۰ روز: {stats['inactive_30d']:,}"
     )
     await message.edit_text(text, reply_markup=user_stats_keyboard())
+
+
+async def _show_support_statistics(
+    *,
+    message: Message,
+    support_service: SupportService,
+) -> None:
+    stats = await support_service.get_support_statistics()
+    text = (
+        "🆘 آمار پشتیبانی\n\n"
+        f"🎫 کل تیکت‌ها: {stats['total']:,}\n\n"
+        f"🟢 باز: {stats['open']:,}\n"
+        f"🔴 بسته: {stats['closed']:,}\n\n"
+        "📅 فعالیت تیکت‌ها\n\n"
+        f"📝 امروز: {stats['today']:,}\n"
+        f"📝 ۷ روز اخیر: {stats['last_7_days']:,}\n"
+        f"📝 ۳۰ روز اخیر: {stats['last_30_days']:,}"
+    )
+    await message.edit_text(text, reply_markup=support_stats_keyboard())
 
 
 async def _show_placeholder_statistics(

@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy import delete as sql_delete, func, select, update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -75,6 +76,45 @@ class SupportRepository(ISupportRepository):
         result = await self._session.execute(sql_delete(SupportTicketRecord))
         await self._session.flush()
         return result.rowcount or 0
+
+    # Statistics
+
+    async def count_total(self) -> int:
+        result = await self._session.execute(select(func.count()).select_from(SupportTicketRecord))
+        return result.scalar_one()
+
+    async def count_by_status(self, status: SupportStatus) -> int:
+        result = await self._session.execute(
+            select(func.count()).select_from(SupportTicketRecord).where(SupportTicketRecord.status == status.value)
+        )
+        return result.scalar_one()
+
+    async def count_today(self, today_start: datetime) -> int:
+        result = await self._session.execute(
+            select(func.count()).select_from(SupportTicketRecord).where(
+                SupportTicketRecord.created_at.is_not(None),
+                SupportTicketRecord.created_at >= today_start,
+            )
+        )
+        return result.scalar_one()
+
+    async def count_last_7_days(self, seven_days_ago: datetime) -> int:
+        result = await self._session.execute(
+            select(func.count()).select_from(SupportTicketRecord).where(
+                SupportTicketRecord.created_at.is_not(None),
+                SupportTicketRecord.created_at >= seven_days_ago,
+            )
+        )
+        return result.scalar_one()
+
+    async def count_last_30_days(self, thirty_days_ago: datetime) -> int:
+        result = await self._session.execute(
+            select(func.count()).select_from(SupportTicketRecord).where(
+                SupportTicketRecord.created_at.is_not(None),
+                SupportTicketRecord.created_at >= thirty_days_ago,
+            )
+        )
+        return result.scalar_one()
 
     @staticmethod
     def _to_domain(record: SupportTicketRecord) -> SupportTicket:

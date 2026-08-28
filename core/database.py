@@ -23,6 +23,7 @@ class Database:
         async with self.engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
             await self._migrate_users(connection)
+            await self._migrate_support_tickets(connection)
 
     async def _migrate_users(self, connection) -> None:
         """Small compatibility migration for the existing users table."""
@@ -41,6 +42,21 @@ class Database:
             await connection.execute(text("ALTER TABLE users ADD COLUMN last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"))
         await connection.execute(text("ALTER TABLE users MODIFY COLUMN name VARCHAR(100) NULL"))
         await connection.execute(text("ALTER TABLE users MODIFY COLUMN age INTEGER NULL"))
+
+    async def _migrate_support_tickets(self, connection) -> None:
+        """Migration for support_tickets table to add created_at column."""
+        result = await connection.execute(text("SHOW COLUMNS FROM support_tickets"))
+        columns = {row[0] for row in result}
+        if "created_at" not in columns:
+            await connection.execute(
+                text("ALTER TABLE support_tickets ADD COLUMN created_at DATETIME NULL")
+            )
+            await connection.execute(
+                text(
+                    "UPDATE support_tickets SET created_at = CURRENT_TIMESTAMP "
+                    "WHERE created_at IS NULL"
+                )
+            )
 
     async def dispose(self) -> None:
         await self.engine.dispose()

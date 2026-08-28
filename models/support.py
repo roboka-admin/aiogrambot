@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 
 
@@ -13,6 +14,7 @@ class SupportTicket:
     user_telegram_id: int
     message: str
     status: SupportStatus = SupportStatus.OPEN
+    created_at: datetime | None = None
 
 
 @dataclass(slots=True)

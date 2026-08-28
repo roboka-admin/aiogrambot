@@ -1,4 +1,5 @@
-from sqlalchemy import BigInteger, String
+from datetime import datetime
+from sqlalchemy import BigInteger, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base
@@ -17,4 +18,7 @@ class SupportTicketRecord(Base):
         String(20),
         default=SupportStatus.OPEN.value,
         index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
