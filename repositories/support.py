@@ -1,4 +1,5 @@
 from datetime import datetime
+
 from sqlalchemy import delete as sql_delete, func, select, update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +13,12 @@ class SupportRepository(ISupportRepository):
         self._session = session
 
     async def create(self, ticket: SupportTicket) -> SupportTicket:
-        record = SupportTicketRecord(user_telegram_id=ticket.user_telegram_id, message=ticket.message, status=ticket.status.value)
+        record = SupportTicketRecord(
+            user_telegram_id=ticket.user_telegram_id,
+            message=ticket.message,
+            status=ticket.status.value,
+            created_at=ticket.created_at,
+        )
         self._session.add(record)
         await self._session.flush()
         return self._to_domain(record)
@@ -22,18 +28,40 @@ class SupportRepository(ISupportRepository):
         return None if record is None else self._to_domain(record)
 
     async def list_by_user(self, telegram_id: int) -> list[SupportTicket]:
-        result = await self._session.execute(select(SupportTicketRecord).where(SupportTicketRecord.user_telegram_id == telegram_id).order_by(SupportTicketRecord.id.asc()))
+        result = await self._session.execute(
+            select(SupportTicketRecord)
+            .where(SupportTicketRecord.user_telegram_id == telegram_id)
+            .order_by(SupportTicketRecord.id.asc())
+        )
         return [self._to_domain(record) for record in result.scalars()]
 
-    async def list_by_user_and_status(self, telegram_id: int, status: SupportStatus) -> list[SupportTicket]:
-        result = await self._session.execute(select(SupportTicketRecord).where(SupportTicketRecord.user_telegram_id == telegram_id, SupportTicketRecord.status == status.value).order_by(SupportTicketRecord.id.asc()))
+    async def list_by_user_and_status(
+        self,
+        telegram_id: int,
+        status: SupportStatus,
+    ) -> list[SupportTicket]:
+        result = await self._session.execute(
+            select(SupportTicketRecord)
+            .where(
+                SupportTicketRecord.user_telegram_id == telegram_id,
+                SupportTicketRecord.status == status.value,
+            )
+            .order_by(SupportTicketRecord.id.asc())
+        )
         return [self._to_domain(record) for record in result.scalars()]
 
     async def list_by_status(self, status: SupportStatus) -> list[SupportTicket]:
-        result = await self._session.execute(select(SupportTicketRecord).where(SupportTicketRecord.status == status.value).order_by(SupportTicketRecord.id.asc()))
+        result = await self._session.execute(
+            select(SupportTicketRecord)
+            .where(SupportTicketRecord.status == status.value)
+            .order_by(SupportTicketRecord.id.asc())
+        )
         return [self._to_domain(record) for record in result.scalars()]
 
-    async def list_user_summaries_by_status(self, status: SupportStatus) -> list[SupportUserSummary]:
+    async def list_user_summaries_by_status(
+        self,
+        status: SupportStatus,
+    ) -> list[SupportUserSummary]:
         result = await self._session.execute(
             select(
                 SupportTicketRecord.user_telegram_id,
@@ -43,20 +71,32 @@ class SupportRepository(ISupportRepository):
             .group_by(SupportTicketRecord.user_telegram_id)
             .order_by(func.max(SupportTicketRecord.id).desc())
         )
-        return [SupportUserSummary(user_telegram_id=row.user_telegram_id, ticket_count=row.ticket_count) for row in result]
+        return [
+            SupportUserSummary(
+                user_telegram_id=row.user_telegram_id,
+                ticket_count=row.ticket_count,
+            )
+            for row in result
+        ]
 
     async def update(self, ticket: SupportTicket) -> SupportTicket | None:
         if ticket.id is None:
             raise ValueError("Ticket id is required for update")
+
         record = await self._session.get(SupportTicketRecord, ticket.id)
         if record is None:
             return None
+
         record.message = ticket.message
         record.status = ticket.status.value
         await self._session.flush()
         return self._to_domain(record)
 
-    async def update_user_status(self, telegram_id: int, status: SupportStatus) -> int:
+    async def update_user_status(
+        self,
+        telegram_id: int,
+        status: SupportStatus,
+    ) -> int:
         result = await self._session.execute(
             sql_update(SupportTicketRecord)
             .where(SupportTicketRecord.user_telegram_id == telegram_id)
@@ -67,7 +107,9 @@ class SupportRepository(ISupportRepository):
 
     async def delete_by_status(self, status: SupportStatus) -> int:
         result = await self._session.execute(
-            sql_delete(SupportTicketRecord).where(SupportTicketRecord.status == status.value)
+            sql_delete(SupportTicketRecord).where(
+                SupportTicketRecord.status == status.value
+            )
         )
         await self._session.flush()
         return result.rowcount or 0
@@ -80,42 +122,49 @@ class SupportRepository(ISupportRepository):
     # Statistics
 
     async def count_total(self) -> int:
-        result = await self._session.execute(select(func.count()).select_from(SupportTicketRecord))
+        result = await self._session.execute(
+            select(func.count()).select_from(SupportTicketRecord)
+        )
         return result.scalar_one()
 
     async def count_by_status(self, status: SupportStatus) -> int:
         result = await self._session.execute(
-            select(func.count()).select_from(SupportTicketRecord).where(SupportTicketRecord.status == status.value)
+            select(func.count())
+            .select_from(SupportTicketRecord)
+            .where(SupportTicketRecord.status == status.value)
         )
         return result.scalar_one()
 
     async def count_today(self, today_start: datetime) -> int:
         result = await self._session.execute(
-            select(func.count()).select_from(SupportTicketRecord).where(
-                SupportTicketRecord.created_at.is_not(None),
-                SupportTicketRecord.created_at >= today_start,
-            )
+            select(func.count())
+            .select_from(SupportTicketRecord)
+            .where(SupportTicketRecord.created_at >= today_start)
         )
         return result.scalar_one()
 
     async def count_last_7_days(self, seven_days_ago: datetime) -> int:
         result = await self._session.execute(
-            select(func.count()).select_from(SupportTicketRecord).where(
-                SupportTicketRecord.created_at.is_not(None),
-                SupportTicketRecord.created_at >= seven_days_ago,
-            )
+            select(func.count())
+            .select_from(SupportTicketRecord)
+            .where(SupportTicketRecord.created_at >= seven_days_ago)
         )
         return result.scalar_one()
 
     async def count_last_30_days(self, thirty_days_ago: datetime) -> int:
         result = await self._session.execute(
-            select(func.count()).select_from(SupportTicketRecord).where(
-                SupportTicketRecord.created_at.is_not(None),
-                SupportTicketRecord.created_at >= thirty_days_ago,
-            )
+            select(func.count())
+            .select_from(SupportTicketRecord)
+            .where(SupportTicketRecord.created_at >= thirty_days_ago)
         )
         return result.scalar_one()
 
     @staticmethod
     def _to_domain(record: SupportTicketRecord) -> SupportTicket:
-        return SupportTicket(id=record.id, user_telegram_id=record.user_telegram_id, message=record.message, status=SupportStatus(record.status))
+        return SupportTicket(
+            id=record.id,
+            user_telegram_id=record.user_telegram_id,
+            message=record.message,
+            status=SupportStatus(record.status),
+            created_at=record.created_at,
+        )
