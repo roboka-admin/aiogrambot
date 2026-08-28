@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from core.timezone import tehran_now
+
 
 @dataclass(slots=True)
 class BroadcastRecord:
@@ -11,4 +13,4 @@ class BroadcastRecord:
     success_count: int
     failed_count: int
     duration_seconds: int
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=tehran_now)
