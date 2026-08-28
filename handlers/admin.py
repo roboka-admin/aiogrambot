@@ -18,6 +18,7 @@ from filters.admin import AdminFilter
 from keyboards.admin import admin_menu
 from keyboards.admin_cancel import admin_cancel_keyboard
 from keyboards.admin_stats import (
+    broadcast_stats_keyboard,
     placeholder_stats_keyboard,
     stats_dashboard_keyboard,
     support_stats_keyboard,
@@ -30,6 +31,7 @@ from keyboards.admin_users import (
     users_keyboard,
 )
 from models.user import User, UserStatus
+from services.broadcast import BroadcastService
 from services.notification import NotificationService
 from services.support import SupportService
 from services.user import UserService
@@ -90,9 +92,21 @@ async def support_stats_handler(
     await callback.answer()
 
 
+@router.callback_query(AdminStatsCallback.filter(F.section == "broadcast"))
+async def broadcast_stats_handler(
+    callback: CallbackQuery,
+    broadcast_service: BroadcastService,
+) -> None:
+    await _show_broadcast_statistics(
+        message=callback.message,
+        broadcast_service=broadcast_service,
+    )
+    await callback.answer()
+
+
 @router.callback_query(
     AdminStatsCallback.filter(
-        F.section.in_({"broadcast", "antispam", "system"})
+        F.section.in_({"antispam", "system"})
     )
 )
 async def placeholder_stats_handler(
@@ -112,6 +126,7 @@ async def stats_refresh_handler(
     callback_data: AdminStatsRefreshCallback,
     user_service: UserService,
     support_service: SupportService,
+    broadcast_service: BroadcastService,
 ) -> None:
     section = callback_data.section
 
@@ -126,6 +141,11 @@ async def stats_refresh_handler(
         await _show_support_statistics(
             message=callback.message,
             support_service=support_service,
+        )
+    elif section == "broadcast":
+        await _show_broadcast_statistics(
+            message=callback.message,
+            broadcast_service=broadcast_service,
         )
     else:
         await _show_placeholder_statistics(
@@ -418,6 +438,51 @@ async def _show_support_statistics(
         f"📝 ۳۰ روز اخیر: {stats['last_30_days']:,}"
     )
     await message.edit_text(text, reply_markup=support_stats_keyboard())
+
+
+async def _show_broadcast_statistics(
+    *,
+    message: Message,
+    broadcast_service: BroadcastService,
+) -> None:
+    stats = await broadcast_service.get_broadcast_statistics()
+
+    if stats["latest_total_recipients"] is None:
+        text = (
+            "📢 آمار همگانی\n\n"
+            "هنوز هیچ پیام همگانی ارسال نشده است."
+        )
+    else:
+        from core.timezone import TEHRAN_TZ
+        latest_dt = stats["latest_created_at"]
+        if latest_dt is not None:
+            if latest_dt.tzinfo is None:
+                latest_dt = latest_dt.replace(tzinfo=TEHRAN_TZ)
+            latest_str = latest_dt.strftime("%Y/%m/%d - %H:%M")
+        else:
+            latest_str = "—"
+
+        duration = stats["latest_duration_seconds"]
+        minutes, seconds = divmod(duration, 60)
+        if minutes:
+            duration_str = f"{minutes} دقیقه و {seconds} ثانیه"
+        else:
+            duration_str = f"{seconds} ثانیه"
+
+        success_rate = stats["latest_success_rate"]
+        text = (
+            "📢 آمار همگانی\n\n"
+            f"📨 کل ارسال‌ها: {stats['total_broadcasts']:,}\n\n"
+            "📊 آخرین ارسال\n\n"
+            f"👥 تعداد دریافت‌کنندگان: {stats['latest_total_recipients']:,}\n"
+            f"✅ موفق: {stats['latest_success']:,}\n"
+            f"❌ ناموفق: {stats['latest_failed']:,}\n"
+            f"📈 نرخ موفقیت: {success_rate:.1f}%\n\n"
+            f"📅 زمان ارسال:\n{latest_str}\n"
+            f"⏱ مدت زمان: {duration_str}"
+        )
+
+    await message.edit_text(text, reply_markup=broadcast_stats_keyboard())
 
 
 async def _show_placeholder_statistics(

@@ -40,7 +40,14 @@ def support_stats_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
-def placeholder_stats_keyboard(section: str) -> InlineKeyboardMarkup:
+def broadcast_stats_keyboard() -> InlineKeyboardMarkup:
+    """Broadcast statistics keyboard with refresh and back buttons."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🔄 بروزرسانی", callback_data=AdminStatsRefreshCallback(section="broadcast").pack()),
+            InlineKeyboardButton(text="⬅️ آمار و وضعیت", callback_data=AdminStatsCallback(section="dashboard").pack()),
+        ],
+    ])
     """Placeholder keyboard for unimplemented statistics sections."""
     return InlineKeyboardMarkup(inline_keyboard=[
         [

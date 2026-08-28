@@ -17,9 +17,10 @@ class Database:
 
     async def create_tables(self) -> None:
         from models.base import Base
+        from models.broadcast_db import BroadcastRecordRecord
         from models.support_db import SupportTicketRecord
         from models.user_db import UserRecord
-        _ = UserRecord, SupportTicketRecord
+        _ = UserRecord, SupportTicketRecord, BroadcastRecordRecord
         async with self.engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
             await self._migrate_users(connection)

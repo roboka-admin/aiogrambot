@@ -4,6 +4,8 @@ from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
 from core.database import Database
+from repositories.broadcast import BroadcastRepository
+from repositories.interfaces.broadcast import IBroadcastRepository
 from repositories.support import SupportRepository
 from repositories.user import UserRepository
 from services.broadcast import BroadcastService
@@ -32,6 +34,7 @@ class ServicesMiddleware(BaseMiddleware):
             async with session.begin():
                 user_repository = UserRepository(session)
                 support_repository = SupportRepository(session)
+                broadcast_repository = BroadcastRepository(session)
 
                 register_service = RegisterService(
                     user_repository=user_repository,
@@ -44,6 +47,7 @@ class ServicesMiddleware(BaseMiddleware):
                 )
                 broadcast_service = BroadcastService(
                     user_repository=user_repository,
+                    broadcast_repository=broadcast_repository,
                     bot=data["bot"],
                 )
                 notification_service = NotificationService(bot=data["bot"])

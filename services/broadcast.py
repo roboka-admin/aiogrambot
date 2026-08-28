@@ -3,6 +3,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import timedelta
 
 from aiogram import Bot
 from aiogram.exceptions import (
@@ -12,6 +13,9 @@ from aiogram.exceptions import (
     TelegramRetryAfter,
 )
 
+from core.timezone import tehran_now
+from models.broadcast import BroadcastRecord
+from repositories.interfaces.broadcast import IBroadcastRepository
 from repositories.interfaces.user import IUserRepository
 
 logger = logging.getLogger(__name__)
@@ -55,12 +59,63 @@ class BroadcastResult:
 class BroadcastService:
     """Coordinates safe delivery of an admin message to active users."""
 
-    def __init__(self, *, user_repository: IUserRepository, bot: Bot) -> None:
+    def __init__(
+        self,
+        *,
+        user_repository: IUserRepository,
+        broadcast_repository: IBroadcastRepository,
+        bot: Bot,
+    ) -> None:
         self._user_repository = user_repository
+        self._broadcast_repository = broadcast_repository
         self._bot = bot
 
     async def count_recipients(self) -> int:
         return len(await self._user_repository.list_active_telegram_ids())
+
+    async def get_broadcast_statistics(self) -> dict[str, int | float | str | None]:
+        now = tehran_now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        seven_days_ago = today_start - timedelta(days=7)
+        thirty_days_ago = today_start - timedelta(days=30)
+
+        total_broadcasts = await self._broadcast_repository.count_total()
+        today_count = await self._broadcast_repository.count_today(today_start)
+        last_7_days = await self._broadcast_repository.count_last_7_days(seven_days_ago)
+        last_30_days = await self._broadcast_repository.count_last_30_days(thirty_days_ago)
+
+        latest = await self._broadcast_repository.get_latest()
+
+        if latest is None:
+            return {
+                "total_broadcasts": total_broadcasts,
+                "today": today_count,
+                "last_7_days": last_7_days,
+                "last_30_days": last_30_days,
+                "latest_total_recipients": None,
+                "latest_success": None,
+                "latest_failed": None,
+                "latest_duration_seconds": None,
+                "latest_success_rate": None,
+                "latest_created_at": None,
+            }
+
+        success_rate = 0.0
+        if latest.total_recipients > 0:
+            success_rate = (latest.success_count / latest.total_recipients) * 100
+
+        return {
+            "total_broadcasts": total_broadcasts,
+            "today": today_count,
+            "last_7_days": last_7_days,
+            "last_30_days": last_30_days,
+            "latest_total_recipients": latest.total_recipients,
+            "latest_success": latest.success_count,
+            "latest_failed": latest.failed_count,
+            "latest_duration_seconds": latest.duration_seconds,
+            "latest_success_rate": success_rate,
+            "latest_created_at": latest.created_at,
+        }
 
     async def broadcast(
         self,
@@ -113,12 +168,25 @@ class BroadcastService:
             if processed < total:
                 await asyncio.sleep(_SEND_DELAY_SECONDS)
 
-        return BroadcastResult(
+        result = BroadcastResult(
             total=total,
             success=success,
             failed=failed,
             duration_seconds=round(time.monotonic() - started_at),
         )
+
+        await self._broadcast_repository.create(
+            BroadcastRecord(
+                id=None,
+                total_recipients=result.total,
+                success_count=result.success,
+                failed_count=result.failed,
+                duration_seconds=result.duration_seconds,
+                created_at=tehran_now(),
+            )
+        )
+
+        return result
 
     async def _copy_with_retry(
         self,
