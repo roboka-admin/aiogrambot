@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 
+from core.timezone import tehran_now
 from models.base import Base
 
 
@@ -17,5 +18,7 @@ class BroadcastRecordRecord(Base):
     failed_count: Mapped[int] = mapped_column(Integer, nullable=False)
     duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
+        DateTime(timezone=True),
+        default=tehran_now,
+        nullable=False,
     )
