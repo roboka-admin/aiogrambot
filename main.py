@@ -11,6 +11,7 @@ from handlers.admin_broadcast import router as admin_broadcast_router
 from handlers.admin_cancel import router as admin_cancel_router
 from handlers.admin_support import router as admin_support_router
 from handlers.admin_support_settings import router as admin_support_settings_router
+from handlers.admin_system_stats import router as admin_system_stats_router
 from handlers.edit_profile import router as edit_profile_router
 from handlers.profile import router as profile_router
 from handlers.register import router as register_router
@@ -52,6 +53,7 @@ async def main() -> None:
     dp.include_router(profile_router)
     dp.include_router(support_router)
     dp.include_router(edit_profile_router)
+    dp.include_router(admin_system_stats_router)
     dp.include_router(admin_router)
     dp.include_router(admin_cancel_router)
     dp.include_router(admin_broadcast_router)
