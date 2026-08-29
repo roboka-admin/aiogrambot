@@ -1,9 +1,10 @@
 import logging
-import os
 import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
+
+import psutil
 
 from core.timezone import tehran_now
 
@@ -44,6 +45,7 @@ class SystemService:
         self._total_updates = 0
         self._total_errors = 0
         self._database = database
+        psutil.cpu_percent(interval=None)
 
     def record_update(self) -> None:
         self._total_updates += 1
@@ -63,6 +65,9 @@ class SystemService:
             except Exception:
                 logger.exception("Failed to collect database statistics")
 
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage("/")
+
         return SystemStats(
             bot_started_at=self._started_at,
             current_time=tehran_now(),
@@ -70,13 +75,13 @@ class SystemService:
             server_uptime_seconds=self._server_uptime(),
             total_updates=self._total_updates,
             total_errors=self._total_errors,
-            cpu_percent=self._cpu_percent(),
-            memory_percent=self._memory_percent(),
-            memory_used_mb=self._memory_used_mb(),
-            memory_total_mb=self._memory_total_mb(),
-            disk_percent=self._disk_percent(),
-            disk_used_gb=self._disk_used_gb(),
-            disk_total_gb=self._disk_total_gb(),
+            cpu_percent=round(psutil.cpu_percent(interval=None), 1),
+            memory_percent=round(memory.percent, 1),
+            memory_used_mb=memory.used // (1024**2),
+            memory_total_mb=memory.total // (1024**2),
+            disk_percent=round(disk.percent, 1),
+            disk_used_gb=round(disk.used / (1024**3), 2),
+            disk_total_gb=round(disk.total / (1024**3), 2),
             database_healthy=db_healthy,
             db_table_count=db_table_count,
             db_row_count=db_row_count,
@@ -85,77 +90,7 @@ class SystemService:
     @staticmethod
     def _server_uptime() -> int | None:
         try:
-            with open("/proc/uptime", encoding="utf-8") as file:
-                return int(float(file.readline().split()[0]))
-        except (OSError, ValueError, IndexError):
+            return max(0, int(time.time() - psutil.boot_time()))
+        except (OSError, ValueError, RuntimeError):
+            logger.exception("Failed to collect server uptime")
             return None
-
-    @staticmethod
-    def _memory_info() -> tuple[int, int] | None:
-        try:
-            values: dict[str, int] = {}
-            with open("/proc/meminfo", encoding="utf-8") as file:
-                for line in file:
-                    key, value, *_ = line.split()
-                    if key in {"MemTotal:", "MemAvailable:"}:
-                        values[key] = int(value)
-            if "MemTotal:" in values and "MemAvailable:" in values:
-                total = values["MemTotal:"] // 1024
-                available = values["MemAvailable:"] // 1024
-                return total, max(0, total - available)
-        except (OSError, ValueError, IndexError):
-            pass
-        return None
-
-    @classmethod
-    def _memory_total_mb(cls) -> int | None:
-        info = cls._memory_info()
-        return info[0] if info else None
-
-    @classmethod
-    def _memory_used_mb(cls) -> int | None:
-        info = cls._memory_info()
-        return info[1] if info else None
-
-    @classmethod
-    def _memory_percent(cls) -> float | None:
-        info = cls._memory_info()
-        if info and info[0]:
-            return round((info[1] / info[0]) * 100, 1)
-        return None
-
-    @staticmethod
-    def _cpu_percent() -> float | None:
-        try:
-            with open("/proc/loadavg", encoding="utf-8") as file:
-                load = float(file.readline().split()[0])
-            return round(min(100.0, load / (os.cpu_count() or 1) * 100), 1)
-        except (OSError, ValueError, IndexError):
-            return None
-
-    @staticmethod
-    def _disk_usage() -> tuple[int, int] | None:
-        try:
-            usage = os.statvfs("/")
-            total = usage.f_blocks * usage.f_frsize
-            free = usage.f_bavail * usage.f_frsize
-            return total, total - free
-        except OSError:
-            return None
-
-    @classmethod
-    def _disk_percent(cls) -> float | None:
-        usage = cls._disk_usage()
-        if usage and usage[0]:
-            return round((usage[1] / usage[0]) * 100, 1)
-        return None
-
-    @classmethod
-    def _disk_used_gb(cls) -> float | None:
-        usage = cls._disk_usage()
-        return round(usage[1] / (1024**3), 2) if usage else None
-
-    @classmethod
-    def _disk_total_gb(cls) -> float | None:
-        usage = cls._disk_usage()
-        return round(usage[0] / (1024**3), 2) if usage else None
