@@ -60,6 +60,39 @@ async def user_management_handler(message: Message) -> None:
     await _show_user_management(message=message)
 
 
+@router.callback_query(F.data == "admin_user_management")
+async def user_management_callback_handler(callback: CallbackQuery) -> None:
+    await _show_user_management(message=callback.message, edit=True)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_browse_users")
+async def browse_users_start_handler(
+    callback: CallbackQuery,
+    user_service: UserService,
+) -> None:
+    await _show_users_page(
+        message=callback.message,
+        user_service=user_service,
+        page=0,
+        edit=True,
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_find_user")
+async def find_user_start_handler(
+    callback: CallbackQuery,
+    state: FSMContext,
+) -> None:
+    await state.set_state(AdminUserStates.waiting_for_user_id)
+    await callback.message.edit_text(
+        "🔎 شناسه تلگرام کاربر را ارسال کنید:",
+        reply_markup=admin_cancel_keyboard,
+    )
+    await callback.answer()
+
+
 @router.message(F.text == "📊 آمار")
 async def stats_dashboard_handler(message: Message) -> None:
     await _show_stats_dashboard(message=message, edit=False)
