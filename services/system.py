@@ -65,9 +65,6 @@ class SystemService:
             except Exception:
                 logger.exception("Failed to collect database statistics")
 
-        memory = psutil.virtual_memory()
-        disk = psutil.disk_usage("/")
-
         return SystemStats(
             bot_started_at=self._started_at,
             current_time=tehran_now(),
@@ -75,17 +72,81 @@ class SystemService:
             server_uptime_seconds=self._server_uptime(),
             total_updates=self._total_updates,
             total_errors=self._total_errors,
-            cpu_percent=round(psutil.cpu_percent(interval=None), 1),
-            memory_percent=round(memory.percent, 1),
-            memory_used_mb=memory.used // (1024**2),
-            memory_total_mb=memory.total // (1024**2),
-            disk_percent=round(disk.percent, 1),
-            disk_used_gb=round(disk.used / (1024**3), 2),
-            disk_total_gb=round(disk.total / (1024**3), 2),
+            cpu_percent=self._cpu_percent(),
+            memory_percent=self._memory_percent(),
+            memory_used_mb=self._memory_used_mb(),
+            memory_total_mb=self._memory_total_mb(),
+            disk_percent=self._disk_percent(),
+            disk_used_gb=self._disk_used_gb(),
+            disk_total_gb=self._disk_total_gb(),
             database_healthy=db_healthy,
             db_table_count=db_table_count,
             db_row_count=db_row_count,
         )
+
+    @staticmethod
+    def _cpu_percent() -> float | None:
+        try:
+            return round(psutil.cpu_percent(interval=None), 1)
+        except (OSError, RuntimeError):
+            logger.exception("Failed to collect CPU usage")
+            return None
+
+    @staticmethod
+    def _memory_info() -> tuple[int, int, float] | None:
+        try:
+            memory = psutil.virtual_memory()
+            return (
+                memory.used // (1024**2),
+                memory.total // (1024**2),
+                round(memory.percent, 1),
+            )
+        except (OSError, RuntimeError):
+            logger.exception("Failed to collect memory usage")
+            return None
+
+    @classmethod
+    def _memory_used_mb(cls) -> int | None:
+        info = cls._memory_info()
+        return info[0] if info else None
+
+    @classmethod
+    def _memory_total_mb(cls) -> int | None:
+        info = cls._memory_info()
+        return info[1] if info else None
+
+    @classmethod
+    def _memory_percent(cls) -> float | None:
+        info = cls._memory_info()
+        return info[2] if info else None
+
+    @staticmethod
+    def _disk_usage() -> tuple[float, float, float] | None:
+        try:
+            disk = psutil.disk_usage("/")
+            return (
+                disk.used / (1024**3),
+                disk.total / (1024**3),
+                round(disk.percent, 1),
+            )
+        except (OSError, RuntimeError):
+            logger.exception("Failed to collect disk usage")
+            return None
+
+    @classmethod
+    def _disk_used_gb(cls) -> float | None:
+        usage = cls._disk_usage()
+        return round(usage[0], 2) if usage else None
+
+    @classmethod
+    def _disk_total_gb(cls) -> float | None:
+        usage = cls._disk_usage()
+        return round(usage[1], 2) if usage else None
+
+    @classmethod
+    def _disk_percent(cls) -> float | None:
+        usage = cls._disk_usage()
+        return usage[2] if usage else None
 
     @staticmethod
     def _server_uptime() -> int | None:
