@@ -38,7 +38,7 @@ async def main() -> None:
 
     system_service = SystemService(database=database)
 
-    dp.update.middleware(LoggingMiddleware())
+    dp.update.middleware(LoggingMiddleware(system_service=system_service))
     dp.update.middleware(
         ServicesMiddleware(database=database, system_service=system_service)
     )
