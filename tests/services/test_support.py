@@ -1,4 +1,4 @@
-import asyncio
+import pytest
 
 from models.support import SupportStatus
 from services.support import SupportService
@@ -69,32 +69,25 @@ class FakeSupportRepository:
         return sum(t.created_at >= start for t in self.tickets.values())
 
 
-def make_service() -> SupportService:
-    return SupportService(support_repository=FakeSupportRepository())
+@pytest.fixture
+def service_and_repository() -> tuple[SupportService, FakeSupportRepository]:
+    repository = FakeSupportRepository()
+    return SupportService(support_repository=repository), repository
 
 
-def test_create_ticket_rejects_empty_message():
-    async def scenario() -> None:
-        service = make_service()
-        try:
-            await service.create_ticket(user_telegram_id=1, message="   ")
-        except ValueError:
-            pass
-        else:
-            raise AssertionError("Expected ValueError")
-
-    asyncio.run(scenario())
+@pytest.mark.asyncio
+async def test_create_ticket_rejects_empty_message(service_and_repository):
+    service, _ = service_and_repository
+    with pytest.raises(ValueError):
+        await service.create_ticket(user_telegram_id=1, message="   ")
 
 
-def test_create_and_close_ticket():
-    async def scenario() -> None:
-        service = make_service()
-        ticket = await service.create_ticket(user_telegram_id=1, message="  Help me  ")
-        assert ticket.message == "Help me"
-        assert ticket.status == SupportStatus.OPEN
-
-        closed = await service.close_ticket(ticket.id)
-        assert closed is not None
-        assert closed.status == SupportStatus.CLOSED
-
-    asyncio.run(scenario())
+@pytest.mark.asyncio
+async def test_create_and_close_ticket(service_and_repository):
+    service, _ = service_and_repository
+    ticket = await service.create_ticket(user_telegram_id=1, message="  Help me  ")
+    assert ticket.message == "Help me"
+    assert ticket.status == SupportStatus.OPEN
+    closed = await service.close_ticket(ticket.id)
+    assert closed is not None
+    assert closed.status == SupportStatus.CLOSED
