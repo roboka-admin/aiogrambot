@@ -1,4 +1,4 @@
-import asyncio
+import pytest
 
 from services.broadcast import BroadcastProgress, BroadcastService
 
@@ -32,89 +32,48 @@ class FakeBot:
         self.sent.append(chat_id)
 
 
-def test_broadcast_empty_recipient_list():
-    async def scenario() -> None:
-        repository = FakeBroadcastRepository()
-        bot = FakeBot()
-        service = BroadcastService(
-            user_repository=FakeUserRepository([]),
-            broadcast_repository=repository,
-            bot=bot,
-        )
-
-        result = await service.broadcast(from_chat_id=1, message_id=2)
-
-        assert result.total == 0
-        assert result.success == 0
-        assert result.failed == 0
-        assert len(repository.records) == 1
-
-    asyncio.run(scenario())
+@pytest.mark.asyncio
+async def test_broadcast_empty_recipient_list():
+    repository = FakeBroadcastRepository()
+    service = BroadcastService(user_repository=FakeUserRepository([]), broadcast_repository=repository, bot=FakeBot())
+    result = await service.broadcast(from_chat_id=1, message_id=2)
+    assert result.total == 0
+    assert result.success == 0
+    assert result.failed == 0
+    assert len(repository.records) == 1
 
 
-def test_broadcast_counts_success_and_failure():
-    async def scenario() -> None:
-        repository = FakeBroadcastRepository()
-        bot = FakeBot(failures={2: RuntimeError("send failed")})
-        service = BroadcastService(
-            user_repository=FakeUserRepository([1, 2, 3]),
-            broadcast_repository=repository,
-            bot=bot,
-        )
-
-        result = await service.broadcast(from_chat_id=10, message_id=20)
-
-        assert result.total == 3
-        assert result.success == 2
-        assert result.failed == 1
-        assert bot.sent == [1, 3]
-        assert repository.records[0].success_count == 2
-        assert repository.records[0].failed_count == 1
-
-    asyncio.run(scenario())
+@pytest.mark.asyncio
+async def test_broadcast_counts_success_and_failure():
+    repository = FakeBroadcastRepository()
+    bot = FakeBot(failures={2: RuntimeError("send failed")})
+    service = BroadcastService(user_repository=FakeUserRepository([1, 2, 3]), broadcast_repository=repository, bot=bot)
+    result = await service.broadcast(from_chat_id=10, message_id=20)
+    assert result.total == 3
+    assert result.success == 2
+    assert result.failed == 1
+    assert bot.sent == [1, 3]
+    assert repository.records[0].success_count == 2
+    assert repository.records[0].failed_count == 1
 
 
-def test_broadcast_progress_reports_at_interval_and_completion():
-    async def scenario() -> None:
-        repository = FakeBroadcastRepository()
-        bot = FakeBot()
-        service = BroadcastService(
-            user_repository=FakeUserRepository([1, 2, 3]),
-            broadcast_repository=repository,
-            bot=bot,
-        )
-        progress: list[BroadcastProgress] = []
+@pytest.mark.asyncio
+async def test_broadcast_progress_reports_at_interval_and_completion():
+    repository = FakeBroadcastRepository()
+    service = BroadcastService(user_repository=FakeUserRepository([1, 2, 3]), broadcast_repository=repository, bot=FakeBot())
+    progress: list[BroadcastProgress] = []
 
-        async def callback(item: BroadcastProgress) -> None:
-            progress.append(item)
+    async def callback(item: BroadcastProgress) -> None:
+        progress.append(item)
 
-        await service.broadcast(
-            from_chat_id=10,
-            message_id=20,
-            progress_callback=callback,
-            progress_interval=2,
-        )
-
-        assert [item.processed for item in progress] == [2, 3]
-        assert progress[-1].percent == 100
-        assert progress[-1].success == 3
-
-    asyncio.run(scenario())
+    await service.broadcast(from_chat_id=10, message_id=20, progress_callback=callback, progress_interval=2)
+    assert [item.processed for item in progress] == [2, 3]
+    assert progress[-1].percent == 100
+    assert progress[-1].success == 3
 
 
-def test_broadcast_rejects_invalid_progress_interval():
-    async def scenario() -> None:
-        service = BroadcastService(
-            user_repository=FakeUserRepository([]),
-            broadcast_repository=FakeBroadcastRepository(),
-            bot=FakeBot(),
-        )
-
-        try:
-            await service.broadcast(from_chat_id=1, message_id=2, progress_interval=0)
-        except ValueError:
-            pass
-        else:
-            raise AssertionError("Expected ValueError")
-
-    asyncio.run(scenario())
+@pytest.mark.asyncio
+async def test_broadcast_rejects_invalid_progress_interval():
+    service = BroadcastService(user_repository=FakeUserRepository([]), broadcast_repository=FakeBroadcastRepository(), bot=FakeBot())
+    with pytest.raises(ValueError):
+        await service.broadcast(from_chat_id=1, message_id=2, progress_interval=0)
