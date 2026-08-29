@@ -6,7 +6,6 @@ from aiogram.types import TelegramObject
 from core.database import Database
 from repositories.antispam import AntiSpamRepository
 from repositories.broadcast import BroadcastRepository
-from repositories.interfaces.broadcast import IBroadcastRepository
 from repositories.support import SupportRepository
 from repositories.user import UserRepository
 from services.antispam import AntiSpamService
@@ -59,8 +58,6 @@ class ServicesMiddleware(BaseMiddleware):
                     antispam_repository=antispam_repository,
                 )
                 notification_service = NotificationService(bot=data["bot"])
-
-                self._system_service.record_update()
 
                 data["register_service"] = register_service
                 data["user_service"] = user_service
