@@ -34,7 +34,7 @@ async def test_block_notification_is_sent():
 
 @pytest.mark.asyncio
 async def test_notification_delivery_error_does_not_escape():
-    bot = FakeBot(error=TelegramAPIError(method="sendMessage"))
+    bot = FakeBot(error=TelegramAPIError(method="sendMessage", message="send failed"))
     service = NotificationService(bot=bot)
     await service.user_blocked(123)
     assert bot.messages == []
