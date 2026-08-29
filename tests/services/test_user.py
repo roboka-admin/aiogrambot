@@ -84,7 +84,11 @@ def make_user(telegram_id: int = 123) -> User:
 @pytest.mark.asyncio
 async def test_get_or_create_tracks_unregistered_user(service_and_repository):
     service, repository = service_and_repository
-    user = await service.get_or_create_telegram_user(123, "Test User", "tester")
+    user = await service.get_or_create_telegram_user(
+        telegram_id=123,
+        telegram_name="Test User",
+        username="tester",
+    )
     assert user.telegram_id == 123
     assert user.registration_status == RegistrationStatus.UNREGISTERED
     assert await repository.exists(123)
@@ -94,7 +98,11 @@ async def test_get_or_create_tracks_unregistered_user(service_and_repository):
 async def test_registration_changes_status_and_profile(service_and_repository):
     service, repository = service_and_repository
     await repository.create(make_user())
-    user = await service.complete_registration(123, " Ali ", 28)
+    user = await service.complete_registration(
+        telegram_id=123,
+        name=" Ali ",
+        age=28,
+    )
     assert user.name == "Ali"
     assert user.age == 28
     assert user.registration_status == RegistrationStatus.REGISTERED
