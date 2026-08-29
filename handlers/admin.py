@@ -55,6 +55,11 @@ async def admin_handler(message: Message, state: FSMContext) -> None:
     )
 
 
+@router.message(F.text == "👤 کاربران")
+async def user_management_handler(message: Message) -> None:
+    await _show_user_management(message=message)
+
+
 @router.message(F.text == "📊 آمار")
 async def stats_dashboard_handler(message: Message) -> None:
     await _show_stats_dashboard(message=message, edit=False)
@@ -118,11 +123,7 @@ async def antispam_stats_handler(
     await callback.answer()
 
 
-@router.callback_query(
-    AdminStatsCallback.filter(
-        F.section.in_({"system"})
-    )
-)
+@router.callback_query(AdminStatsCallback.filter(F.section == "system"))
 async def placeholder_stats_handler(
     callback: CallbackQuery,
     callback_data: AdminStatsCallback,
@@ -274,11 +275,7 @@ async def coin_action_start_handler(
         source=callback_data.source,
         page=callback_data.page,
     )
-    action_text = (
-        "افزایش"
-        if callback_data.action == "add_coin"
-        else "کاهش"
-    )
+    action_text = "افزایش" if callback_data.action == "add_coin" else "کاهش"
     await callback.message.answer(
         f"➖➕ مقدار {action_text} سکه را به صورت عدد ارسال کنید:",
         reply_markup=admin_cancel_keyboard,
@@ -309,19 +306,11 @@ async def coin_amount_handler(
 
     if data["coin_action"] == "add_coin":
         user = await user_service.add_coins(telegram_id, amount)
-        await notification_service.coins_added(
-            telegram_id,
-            amount,
-            user.coins,
-        )
+        await notification_service.coins_added(telegram_id, amount, user.coins)
         notice = f"✅ {amount} سکه اضافه شد."
     else:
         user = await user_service.remove_coins(telegram_id, amount)
-        await notification_service.coins_removed(
-            telegram_id,
-            amount,
-            user.coins,
-        )
+        await notification_service.coins_removed(telegram_id, amount, user.coins)
         notice = f"✅ {amount} سکه کم شد."
 
     await state.clear()
@@ -351,10 +340,7 @@ async def user_action_handler(
         if user.status is UserStatus.BLOCKED:
             await notification_service.user_auto_blocked(telegram_id)
         else:
-            await notification_service.warning_added(
-                telegram_id,
-                user.warnings,
-            )
+            await notification_service.warning_added(telegram_id, user.warnings)
     elif action == "block":
         user = await user_service.block_user(telegram_id)
         notice = "کاربر مسدود شد."
@@ -407,11 +393,7 @@ async def blocked_users_start_handler(
     await callback.answer()
 
 
-async def _show_stats_dashboard(
-    *,
-    message: Message,
-    edit: bool,
-) -> None:
+async def _show_stats_dashboard(*, message: Message, edit: bool) -> None:
     text = "📊 آمار و وضعیت\n\nیکی از گزینه‌ها را انتخاب کنید:"
     keyboard = stats_dashboard_keyboard()
     if edit:
@@ -420,11 +402,7 @@ async def _show_stats_dashboard(
         await message.answer(text, reply_markup=keyboard)
 
 
-async def _show_user_statistics(
-    *,
-    message: Message,
-    user_service: UserService,
-) -> None:
+async def _show_user_statistics(*, message: Message, user_service: UserService) -> None:
     stats = await user_service.get_user_statistics()
     text = (
         "👥 آمار کاربران\n\n"
@@ -441,11 +419,7 @@ async def _show_user_statistics(
     await message.edit_text(text, reply_markup=user_stats_keyboard())
 
 
-async def _show_support_statistics(
-    *,
-    message: Message,
-    support_service: SupportService,
-) -> None:
+async def _show_support_statistics(*, message: Message, support_service: SupportService) -> None:
     stats = await support_service.get_support_statistics()
     text = (
         "🆘 آمار پشتیبانی\n\n"
@@ -460,20 +434,14 @@ async def _show_support_statistics(
     await message.edit_text(text, reply_markup=support_stats_keyboard())
 
 
-async def _show_broadcast_statistics(
-    *,
-    message: Message,
-    broadcast_service: BroadcastService,
-) -> None:
+async def _show_broadcast_statistics(*, message: Message, broadcast_service: BroadcastService) -> None:
     stats = await broadcast_service.get_broadcast_statistics()
 
     if stats["latest_total_recipients"] is None:
-        text = (
-            "📢 آمار همگانی\n\n"
-            "هنوز هیچ پیام همگانی ارسال نشده است."
-        )
+        text = "📢 آمار همگانی\n\nهنوز هیچ پیام همگانی ارسال نشده است."
     else:
         from core.timezone import TEHRAN_TZ
+
         latest_dt = stats["latest_created_at"]
         if latest_dt is not None:
             if latest_dt.tzinfo is None:
@@ -484,12 +452,9 @@ async def _show_broadcast_statistics(
 
         duration = stats["latest_duration_seconds"]
         minutes, seconds = divmod(duration, 60)
-        if minutes:
-            duration_str = f"{minutes} دقیقه و {seconds} ثانیه"
-        else:
-            duration_str = f"{seconds} ثانیه"
-
+        duration_str = f"{minutes} دقیقه و {seconds} ثانیه" if minutes else f"{seconds} ثانیه"
         success_rate = stats["latest_success_rate"]
+
         text = (
             "📢 آمار همگانی\n\n"
             f"📨 کل ارسال‌ها: {stats['total_broadcasts']:,}\n\n"
@@ -509,11 +474,7 @@ async def _show_broadcast_statistics(
     await message.edit_text(text, reply_markup=broadcast_stats_keyboard())
 
 
-async def _show_antispam_statistics(
-    *,
-    message: Message,
-    antispam_service: AntiSpamService,
-) -> None:
+async def _show_antispam_statistics(*, message: Message, antispam_service: AntiSpamService) -> None:
     stats = await antispam_service.get_antispam_statistics()
     text = (
         "🛡️ آمار ضداسپم\n\n"
@@ -527,22 +488,14 @@ async def _show_antispam_statistics(
     await message.edit_text(text, reply_markup=antispam_stats_keyboard())
 
 
-async def _show_placeholder_statistics(
-    *,
-    message: Message,
-    section: str,
-) -> None:
+async def _show_placeholder_statistics(*, message: Message, section: str) -> None:
     await message.edit_text(
         "این بخش به‌زودی اضافه می‌شود.",
         reply_markup=placeholder_stats_keyboard(section),
     )
 
 
-async def _show_user_management(
-    *,
-    message: Message,
-    edit: bool = False,
-) -> None:
+async def _show_user_management(*, message: Message, edit: bool = False) -> None:
     text = "👥 مدیریت کاربران\n\nیکی از گزینه‌ها را انتخاب کنید:"
     keyboard = user_management_keyboard()
     if edit:
@@ -551,23 +504,10 @@ async def _show_user_management(
         await message.answer(text, reply_markup=keyboard)
 
 
-async def _show_users_page(
-    *,
-    message: Message,
-    user_service: UserService,
-    page: int,
-    edit: bool = False,
-) -> None:
-    users, total, page = await user_service.get_users_page(
-        page=page,
-        page_size=_PAGE_SIZE,
-    )
+async def _show_users_page(*, message: Message, user_service: UserService, page: int, edit: bool = False) -> None:
+    users, total, page = await user_service.get_users_page(page=page, page_size=_PAGE_SIZE)
     total_pages = max(ceil(total / _PAGE_SIZE), 1)
-    keyboard = users_keyboard(
-        users=users,
-        page=page,
-        total_pages=total_pages,
-    )
+    keyboard = users_keyboard(users=users, page=page, total_pages=total_pages)
 
     if total == 0:
         text = "👤 کاربران\n\nهنوز کاربری ثبت‌نام نکرده است."
@@ -584,23 +524,10 @@ async def _show_users_page(
         await message.answer(text, reply_markup=keyboard)
 
 
-async def _show_blocked_users_page(
-    *,
-    message: Message,
-    user_service: UserService,
-    page: int,
-    edit: bool = False,
-) -> None:
-    users, total, page = await user_service.get_blocked_users_page(
-        page=page,
-        page_size=_PAGE_SIZE,
-    )
+async def _show_blocked_users_page(*, message: Message, user_service: UserService, page: int, edit: bool = False) -> None:
+    users, total, page = await user_service.get_blocked_users_page(page=page, page_size=_PAGE_SIZE)
     total_pages = max(ceil(total / _PAGE_SIZE), 1)
-    keyboard = blocked_users_keyboard(
-        users=users,
-        page=page,
-        total_pages=total_pages,
-    )
+    keyboard = blocked_users_keyboard(users=users, page=page, total_pages=total_pages)
 
     if total == 0:
         text = "🚫 کاربران مسدود\n\nهیچ کاربر مسدودی وجود ندارد."
