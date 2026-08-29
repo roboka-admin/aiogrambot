@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from models.base import Base
+
 
 class Database:
     def __init__(self, database_url: str) -> None:
@@ -59,6 +61,24 @@ class Database:
                     "WHERE created_at IS NULL"
                 )
             )
+
+    async def get_db_stats(self) -> tuple[int, int | None]:
+        """Get database table count and total row count."""
+        async with self.engine.begin() as connection:
+            result = await connection.execute(
+                text("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()")
+            )
+            table_count = result.scalar_one()
+
+            try:
+                result = await connection.execute(
+                    text("SELECT SUM(table_rows) FROM information_schema.tables WHERE table_schema = DATABASE()")
+                )
+                row_count = result.scalar_one()
+            except Exception:
+                row_count = None
+
+            return table_count or 0, row_count
 
     async def dispose(self) -> None:
         await self.engine.dispose()

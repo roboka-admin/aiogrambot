@@ -14,14 +14,16 @@ from services.broadcast import BroadcastService
 from services.notification import NotificationService
 from services.register import RegisterService
 from services.support import SupportService
+from services.system import SystemService
 from services.user import UserService
 
 
 class ServicesMiddleware(BaseMiddleware):
     """Create request-scoped repository and services."""
 
-    def __init__(self, *, database: Database) -> None:
+    def __init__(self, *, database: Database, system_service: SystemService) -> None:
         self._database = database
+        self._system_service = system_service
 
     async def __call__(
         self,
@@ -58,11 +60,14 @@ class ServicesMiddleware(BaseMiddleware):
                 )
                 notification_service = NotificationService(bot=data["bot"])
 
+                self._system_service.record_update()
+
                 data["register_service"] = register_service
                 data["user_service"] = user_service
                 data["support_service"] = support_service
                 data["broadcast_service"] = broadcast_service
                 data["antispam_service"] = antispam_service
                 data["notification_service"] = notification_service
+                data["system_service"] = self._system_service
 
                 return await handler(event, data)

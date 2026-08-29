@@ -5,6 +5,7 @@ from aiogram import Bot, Dispatcher
 
 from config import BOT_TOKEN, DATABASE_URL
 from core.database import Database
+from services.system import SystemService
 from handlers.admin import router as admin_router
 from handlers.admin_broadcast import router as admin_broadcast_router
 from handlers.admin_cancel import router as admin_cancel_router
@@ -35,9 +36,11 @@ async def main() -> None:
     database = Database(database_url=DATABASE_URL)
     await database.create_tables()
 
+    system_service = SystemService(database=database)
+
     dp.update.middleware(LoggingMiddleware())
     dp.update.middleware(
-        ServicesMiddleware(database=database)
+        ServicesMiddleware(database=database, system_service=system_service)
     )
     dp.update.middleware(UserMiddleware())
 

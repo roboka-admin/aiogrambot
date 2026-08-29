@@ -70,6 +70,10 @@ def antispam_stats_keyboard() -> InlineKeyboardMarkup:
     return _stats_page_keyboard("antispam")
 
 
+def system_stats_keyboard() -> InlineKeyboardMarkup:
+    return _stats_page_keyboard("system")
+
+
 def placeholder_stats_keyboard(section: str) -> InlineKeyboardMarkup:
     """Keyboard for statistics sections that are not implemented yet."""
     return _stats_page_keyboard(section)
