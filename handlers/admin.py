@@ -23,7 +23,6 @@ from keyboards.admin_stats import (
     placeholder_stats_keyboard,
     stats_dashboard_keyboard,
     support_stats_keyboard,
-    system_stats_keyboard,
     user_stats_keyboard,
 )
 from keyboards.admin_user_actions import user_actions_keyboard
@@ -37,7 +36,6 @@ from services.antispam import AntiSpamService
 from services.broadcast import BroadcastService
 from services.notification import NotificationService
 from services.support import SupportService
-from services.system import SystemService
 from services.user import UserService
 from states.admin import AdminUserStates
 
@@ -158,18 +156,6 @@ async def antispam_stats_handler(
     await callback.answer()
 
 
-@router.callback_query(AdminStatsCallback.filter(F.section == "system"))
-async def system_stats_handler(
-    callback: CallbackQuery,
-    system_service: SystemService,
-) -> None:
-    await _show_system_statistics(
-        message=callback.message,
-        system_service=system_service,
-    )
-    await callback.answer()
-
-
 @router.callback_query(AdminStatsRefreshCallback.filter())
 async def stats_refresh_handler(
     callback: CallbackQuery,
@@ -178,7 +164,6 @@ async def stats_refresh_handler(
     support_service: SupportService,
     broadcast_service: BroadcastService,
     antispam_service: AntiSpamService,
-    system_service: SystemService,
 ) -> None:
     section = callback_data.section
 
@@ -203,11 +188,6 @@ async def stats_refresh_handler(
         await _show_antispam_statistics(
             message=callback.message,
             antispam_service=antispam_service,
-        )
-    elif section == "system":
-        await _show_system_statistics(
-            message=callback.message,
-            system_service=system_service,
         )
     else:
         await _show_placeholder_statistics(
@@ -527,35 +507,6 @@ async def _show_antispam_statistics(*, message: Message, antispam_service: AntiS
         f"📝 ۳۰ روز اخیر: {stats['last_30_days']:,}"
     )
     await message.edit_text(text, reply_markup=antispam_stats_keyboard())
-
-
-async def _show_system_statistics(
-    *,
-    message: Message,
-    system_service: SystemService,
-) -> None:
-    stats = await system_service.get_system_statistics()
-
-    uptime = stats.uptime_seconds
-    hours, remainder = divmod(uptime, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    uptime_str = f"{hours} ساعت و {minutes} دقیقه و {seconds} ثانیه"
-
-    started_str = stats.bot_started_at.strftime("%Y/%m/%d - %H:%M")
-
-    text = (
-        "🖥️ وضعیت سیستم\n\n"
-        "🤖 ربات\n\n"
-        f"⏰ شروع به کار: {started_str}\n"
-        f"⏱ زمان فعالیت: {uptime_str}\n"
-        f"📊 کل آپدیت‌ها: {stats.total_updates:,}\n"
-        f"❌ کل خطاها: {stats.total_errors:,}\n\n"
-        "🗃 پایگاه داده\n\n"
-        f"📋 تعداد جدول‌ها: {stats.db_table_count}\n"
-        f"📝 تعداد رکوردها: {stats.db_row_count:,}" if stats.db_row_count else f"📝 تعداد رکوردها: —"
-    )
-
-    await message.edit_text(text, reply_markup=system_stats_keyboard())
 
 
 async def _show_placeholder_statistics(*, message: Message, section: str) -> None:
