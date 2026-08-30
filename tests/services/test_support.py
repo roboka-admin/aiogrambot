@@ -15,6 +15,8 @@ class FakeSupportRepository:
     async def create(self, ticket):
         ticket.id = self.next_id
         self.next_id += 1
+        if ticket.created_at is None:
+            ticket.created_at = tehran_now()
         self.tickets[ticket.id] = ticket
         return ticket
 
@@ -63,13 +65,13 @@ class FakeSupportRepository:
         return sum(t.status == status for t in self.tickets.values())
 
     async def count_today(self, today_start):
-        return sum(t.created_at >= today_start for t in self.tickets.values())
+        return sum(t.created_at is not None and t.created_at >= today_start for t in self.tickets.values())
 
     async def count_last_7_days(self, start):
-        return sum(t.created_at >= start for t in self.tickets.values())
+        return sum(t.created_at is not None and t.created_at >= start for t in self.tickets.values())
 
     async def count_last_30_days(self, start):
-        return sum(t.created_at >= start for t in self.tickets.values())
+        return sum(t.created_at is not None and t.created_at >= start for t in self.tickets.values())
 
 
 @pytest.fixture
