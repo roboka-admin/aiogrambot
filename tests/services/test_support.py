@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 import pytest
 
+from core.timezone import tehran_now
 from models.support import SupportStatus
 from services.support import SupportService
 
@@ -83,11 +86,64 @@ async def test_create_ticket_rejects_empty_message(service_and_repository):
 
 
 @pytest.mark.asyncio
-async def test_create_and_close_ticket(service_and_repository):
+async def test_create_get_and_filter_tickets(service_and_repository):
     service, _ = service_and_repository
-    ticket = await service.create_ticket(user_telegram_id=1, message="  Help me  ")
-    assert ticket.message == "Help me"
-    assert ticket.status == SupportStatus.OPEN
-    closed = await service.close_ticket(ticket.id)
-    assert closed is not None
-    assert closed.status == SupportStatus.CLOSED
+    first = await service.create_ticket(user_telegram_id=1, message="  Help me  ")
+    second = await service.create_ticket(user_telegram_id=1, message="Second")
+    third = await service.create_ticket(user_telegram_id=2, message="Other")
+    await service.close_ticket(second.id)
+
+    assert first.message == "Help me"
+    assert await service.get_ticket(first.id) is first
+    assert [t.id for t in await service.get_user_tickets(1)] == [first.id, second.id]
+    assert [t.id for t in await service.get_user_tickets_by_status(1, SupportStatus.OPEN)] == [first.id]
+    assert [t.id for t in await service.get_tickets_by_status(SupportStatus.OPEN)] == [first.id, third.id]
+
+
+@pytest.mark.asyncio
+async def test_close_missing_ticket_returns_none(service_and_repository):
+    service, _ = service_and_repository
+    assert await service.close_ticket(999) is None
+
+
+@pytest.mark.asyncio
+async def test_close_and_reopen_user_conversation(service_and_repository):
+    service, _ = service_and_repository
+    await service.create_ticket(user_telegram_id=1, message="One")
+    await service.create_ticket(user_telegram_id=1, message="Two")
+
+    assert await service.close_user_conversation(1) == 2
+    assert len(await service.get_user_tickets_by_status(1, SupportStatus.CLOSED)) == 2
+    assert await service.reopen_user_conversation(1) == 2
+    assert len(await service.get_user_tickets_by_status(1, SupportStatus.OPEN)) == 2
+
+
+@pytest.mark.asyncio
+async def test_delete_closed_and_all_tickets(service_and_repository):
+    service, repository = service_and_repository
+    first = await service.create_ticket(user_telegram_id=1, message="One")
+    await service.create_ticket(user_telegram_id=1, message="Two")
+    await service.close_ticket(first.id)
+
+    assert await service.delete_closed_tickets() == 1
+    assert len(repository.tickets) == 1
+    assert await service.delete_all_tickets() == 1
+    assert repository.tickets == {}
+
+
+@pytest.mark.asyncio
+async def test_support_statistics_count_status_and_time_windows(service_and_repository):
+    service, _ = service_and_repository
+    today = await service.create_ticket(user_telegram_id=1, message="Today")
+    old = await service.create_ticket(user_telegram_id=2, message="Old")
+    old.created_at = tehran_now() - timedelta(days=40)
+    await service.close_ticket(today.id)
+
+    stats = await service.get_support_statistics()
+
+    assert stats["total"] == 2
+    assert stats["open"] == 1
+    assert stats["closed"] == 1
+    assert stats["today"] == 1
+    assert stats["last_7_days"] == 1
+    assert stats["last_30_days"] == 1
