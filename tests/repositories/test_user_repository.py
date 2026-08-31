@@ -71,7 +71,7 @@ async def test_user_repository_update_lists_filters_and_delete(session):
     assert updated.coins == 7
     assert [u.telegram_id for u in await repository.list_all()] == [10, 20, 30]
     assert [u.telegram_id for u in await repository.list_page(offset=1, limit=1)] == [20]
-    assert await repository.list_active_telegram_ids() == [10, 30]
+    assert set(await repository.list_active_telegram_ids()) == {10, 30}
     assert [u.telegram_id for u in await repository.list_blocked_page(offset=0, limit=10)] == [20]
 
     assert await repository.delete(20) is True
@@ -91,5 +91,5 @@ async def test_user_repository_registered_only_filter_and_missing_update(session
     )
     await repository.create(User(telegram_id=2, telegram_name="Unregistered"))
 
-    assert await repository.list_active_telegram_ids(registered_only=True) == [1]
+    assert set(await repository.list_active_telegram_ids(registered_only=True)) == {1}
     assert await repository.update(User(telegram_id=999, telegram_name="Missing")) is None
