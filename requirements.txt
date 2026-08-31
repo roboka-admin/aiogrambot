@@ -1,7 +1,6 @@
 aiogram==3.28.2
 SQLAlchemy
 asyncmy
-aiosqlite
 python-dotenv
 psutil
 pytest
