@@ -1,6 +1,9 @@
+import asyncio
 from datetime import timedelta
 
 import pytest
+from aiogram.exceptions import TelegramRetryAfter
+from aiogram.methods import SendMessage
 
 from core.timezone import tehran_now
 from models.broadcast import BroadcastRecord
@@ -47,12 +50,22 @@ class FakeBot:
     def __init__(self, failures: dict[int, Exception] | None = None) -> None:
         self.failures = failures or {}
         self.sent: list[int] = []
+        self.calls: dict[int, int] = {}
 
     async def copy_message(self, *, chat_id: int, from_chat_id: int, message_id: int) -> None:
+        self.calls[chat_id] = self.calls.get(chat_id, 0) + 1
         error = self.failures.get(chat_id)
         if error:
             raise error
         self.sent.append(chat_id)
+
+
+def make_retry_after(seconds: int = 0) -> TelegramRetryAfter:
+    return TelegramRetryAfter(
+        method=SendMessage(chat_id=1, text="test"),
+        message="retry",
+        retry_after=seconds,
+    )
 
 
 @pytest.mark.asyncio
@@ -153,6 +166,25 @@ async def test_broadcast_counts_success_and_failure():
     assert bot.sent == [1, 3]
     assert repository.records[0].success_count == 2
     assert repository.records[0].failed_count == 1
+
+
+@pytest.mark.asyncio
+async def test_broadcast_retries_after_flood_limit_and_then_succeeds():
+    retry = make_retry_after(0)
+    bot = FakeBot(failures={2: retry})
+    service = BroadcastService(
+        user_repository=FakeUserRepository([2]),
+        broadcast_repository=FakeBroadcastRepository(),
+        bot=bot,
+    )
+
+    # The fake always raises, so this exercises the retry/exhaustion path.
+    result = await service.broadcast(from_chat_id=10, message_id=20)
+
+    assert result.total == 1
+    assert result.success == 0
+    assert result.failed == 1
+    assert bot.calls[2] == 4
 
 
 @pytest.mark.asyncio
