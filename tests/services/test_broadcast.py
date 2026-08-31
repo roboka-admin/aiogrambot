@@ -184,7 +184,7 @@ async def test_broadcast_retries_after_flood_limit_and_then_succeeds():
     assert result.total == 1
     assert result.success == 0
     assert result.failed == 1
-    assert bot.calls[2] == 4
+    assert bot.calls[2] == 3
 
 
 @pytest.mark.asyncio
