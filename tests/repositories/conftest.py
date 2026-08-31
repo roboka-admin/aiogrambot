@@ -14,7 +14,8 @@ _ = UserRecord, SupportTicketRecord, BroadcastRecordRecord, AntiSpamEventRecord
 
 @pytest_asyncio.fixture
 async def session() -> AsyncSession:
-    database_url = os.getenv("TEST_DATABASE_URL")\    if not database_url:
+    database_url = os.getenv("TEST_DATABASE_URL")
+    if not database_url:
         raise RuntimeError(
             "TEST_DATABASE_URL is not set. Repository integration tests require "
             "a dedicated MySQL test database; never point it at the production database."
