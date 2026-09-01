@@ -17,14 +17,35 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Load the project's .env so Alembic can use DATABASE_URL when invoked
-# directly from the command line.
+# Load the project's .env so Alembic can resolve the explicitly selected
+# database target when invoked directly from the command line.
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
-url = os.getenv("DATABASE_URL")
-if not url:
-    raise RuntimeError("DATABASE_URL is not configured")
 
+def get_database_url() -> str:
+    """Return the URL for the explicitly selected Alembic database target."""
+    database = context.get_x_argument(as_dictionary=True).get("database")
+
+    env_var_by_database = {
+        "test": "TEST_DATABASE_URL",
+        "main": "DATABASE_URL",
+    }
+
+    if database not in env_var_by_database:
+        raise RuntimeError(
+            "Database target is required. Use '-x database=test' or "
+            "'-x database=main'. Refusing to choose a database implicitly."
+        )
+
+    env_var = env_var_by_database[database]
+    url = os.getenv(env_var)
+    if not url:
+        raise RuntimeError(f"{env_var} is not configured")
+
+    return url
+
+
+url = get_database_url()
 config.set_main_option("sqlalchemy.url", url.replace("+asyncmy", "+pymysql"))
 target_metadata = Base.metadata
 
