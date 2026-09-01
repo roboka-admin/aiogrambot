@@ -3,7 +3,7 @@ from math import ceil
 
 from core.timezone import tehran_now
 from exceptions.user import UserNotFoundError
-from models.user import RegistrationStatus, User, UserStatus
+from models.user import User, UserStatus
 from repositories.interfaces.user import IUserRepository
 
 _MAX_WARNINGS = 3
@@ -100,21 +100,6 @@ class UserService:
     async def update_age(self, telegram_id: int, age: int) -> User:
         user = await self.get_user(telegram_id)
         user.age = age
-        return await self._save(user)
-
-    async def complete_registration(
-        self,
-        *,
-        telegram_id: int,
-        name: str,
-        age: int,
-    ) -> User:
-        user = await self.get_user(telegram_id)
-        if user.registration_status == RegistrationStatus.REGISTERED:
-            raise ValueError("User is already registered")
-        user.name = name.strip()
-        user.age = age
-        user.registration_status = RegistrationStatus.REGISTERED
         return await self._save(user)
 
     async def add_coins(self, telegram_id: int, amount: int = 1) -> User:
