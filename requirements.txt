@@ -1,7 +1,11 @@
 aiogram==3.28.2
 SQLAlchemy
 asyncmy
+pymysql
+alembic
 python-dotenv
 psutil
 pytest
 pytest-asyncio
+pytest-dotenv
+pytest-cov
