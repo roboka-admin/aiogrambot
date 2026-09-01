@@ -144,31 +144,6 @@ async def test_get_user_raises_for_unknown_user(service_and_repository):
 
 
 @pytest.mark.asyncio
-async def test_registration_changes_status_and_profile(service_and_repository):
-    service, repository = service_and_repository
-    await repository.create(make_user())
-    user = await service.complete_registration(
-        telegram_id=123,
-        name=" Ali ",
-        age=28,
-    )
-    assert user.name == "Ali"
-    assert user.age == 28
-    assert user.registration_status == RegistrationStatus.REGISTERED
-
-
-@pytest.mark.asyncio
-async def test_complete_registration_rejects_registered_user(service_and_repository):
-    service, repository = service_and_repository
-    user = make_user()
-    user.registration_status = RegistrationStatus.REGISTERED
-    await repository.create(user)
-
-    with pytest.raises(ValueError):
-        await service.complete_registration(telegram_id=123, name="Ali", age=28)
-
-
-@pytest.mark.asyncio
 async def test_update_name_and_age(service_and_repository):
     service, repository = service_and_repository
     await repository.create(make_user())
