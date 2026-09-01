@@ -4,75 +4,45 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from models.base import Base
-
 
 class Database:
+    """Own the database engine and create request-scoped sessions."""
+
     def __init__(self, database_url: str) -> None:
-        self.engine = create_async_engine(database_url, echo=True)
-        self.session_factory = async_sessionmaker(bind=self.engine, class_=AsyncSession, expire_on_commit=False)
+        self.engine = create_async_engine(
+            database_url,
+            echo=False,
+            pool_pre_ping=True,
+        )
+        self.session_factory = async_sessionmaker(
+            bind=self.engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
 
     @asynccontextmanager
     async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
         async with self.session_factory() as session:
             yield session
 
-    async def create_tables(self) -> None:
-        from models.antispam_db import AntiSpamEventRecord
-        from models.base import Base
-        from models.broadcast_db import BroadcastRecordRecord
-        from models.support_db import SupportTicketRecord
-        from models.user_db import UserRecord
-        _ = UserRecord, SupportTicketRecord, BroadcastRecordRecord, AntiSpamEventRecord
-        async with self.engine.begin() as connection:
-            await connection.run_sync(Base.metadata.create_all)
-            await self._migrate_users(connection)
-            await self._migrate_support_tickets(connection)
-
-    async def _migrate_users(self, connection) -> None:
-        """Small compatibility migration for the existing users table."""
-        result = await connection.execute(text("SHOW COLUMNS FROM users"))
-        columns = {row[0] for row in result}
-        if "telegram_name" not in columns:
-            await connection.execute(text("ALTER TABLE users ADD COLUMN telegram_name VARCHAR(100) NOT NULL DEFAULT ''"))
-        if "username" not in columns:
-            await connection.execute(text("ALTER TABLE users ADD COLUMN username VARCHAR(100) NULL"))
-        if "registration_status" not in columns:
-            await connection.execute(text("ALTER TABLE users ADD COLUMN registration_status VARCHAR(20) NOT NULL DEFAULT 'unregistered'"))
-            await connection.execute(text("UPDATE users SET registration_status = 'registered'"))
-        if "first_seen_at" not in columns:
-            await connection.execute(text("ALTER TABLE users ADD COLUMN first_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"))
-        if "last_seen_at" not in columns:
-            await connection.execute(text("ALTER TABLE users ADD COLUMN last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"))
-        await connection.execute(text("ALTER TABLE users MODIFY COLUMN name VARCHAR(100) NULL"))
-        await connection.execute(text("ALTER TABLE users MODIFY COLUMN age INTEGER NULL"))
-
-    async def _migrate_support_tickets(self, connection) -> None:
-        """Migration for support_tickets table to add created_at column."""
-        result = await connection.execute(text("SHOW COLUMNS FROM support_tickets"))
-        columns = {row[0] for row in result}
-        if "created_at" not in columns:
-            await connection.execute(
-                text("ALTER TABLE support_tickets ADD COLUMN created_at DATETIME NULL")
-            )
-            await connection.execute(
-                text(
-                    "UPDATE support_tickets SET created_at = CURRENT_TIMESTAMP "
-                    "WHERE created_at IS NULL"
-                )
-            )
-
     async def get_db_stats(self) -> tuple[int, int | None]:
         """Get database table count and total row count."""
-        async with self.engine.begin() as connection:
+        async with self.engine.connect() as connection:
             result = await connection.execute(
-                text("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()")
+                text(
+                    "SELECT COUNT(*) FROM information_schema.tables "
+                    "WHERE table_schema = DATABASE()"
+                )
             )
             table_count = result.scalar_one()
 
             try:
                 result = await connection.execute(
-                    text("SELECT SUM(table_rows) FROM information_schema.tables WHERE table_schema = DATABASE()")
+                    text(
+                        "SELECT SUM(table_rows) "
+                        "FROM information_schema.tables "
+                        "WHERE table_schema = DATABASE()"
+                    )
                 )
                 row_count = result.scalar_one()
             except Exception:
