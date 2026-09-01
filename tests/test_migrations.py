@@ -41,7 +41,9 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
             text=True,
         )
 
-        assert "Running upgrade  -> 0001_initial_schema" in result.stdout
+        # Alembic writes its logging output to stderr, so inspect both streams.
+        output = result.stdout + result.stderr
+        assert "Running upgrade  -> 0001_initial_schema" in output
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
             tables = set(
