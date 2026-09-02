@@ -48,7 +48,7 @@ def _prefixes() -> dict[str, str]:
     prefixes: dict[str, str] = {}
     for path in _source_files("callbacks"):
         tree = ast.parse(path.read_text(), filename=str(path))
-        for node in tree.body:
+        for node in ast.walk(tree):
             if not isinstance(node, ast.ClassDef):
                 continue
             if not any(_name(base) == "CallbackData" for base in node.bases):
@@ -67,7 +67,7 @@ def _callback_contract(
     location: str,
 ) -> ButtonContract | None:
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return ButtonContract("callback", node.value, location=location)
+        return ButtonContract("callback_raw", node.value, location=location)
 
     call = node
     if (
@@ -86,8 +86,8 @@ def _callback_contract(
                 if value is not None:
                     constraints.append((keyword.arg or "", value))
             return ButtonContract(
-                "callback",
-                prefixes[class_name],
+                "callback_data",
+                class_name,
                 tuple(sorted(constraints)),
                 location,
             )
@@ -95,37 +95,42 @@ def _callback_contract(
     return None
 
 
-def _local_assignments(
-    function: ast.FunctionDef | ast.AsyncFunctionDef,
-) -> dict[str, list[ast.AST]]:
-    assignments: dict[str, list[ast.AST]] = {}
-    for node in ast.walk(function):
-        if isinstance(node, ast.Assign):
-            targets = node.targets
-        elif isinstance(node, ast.AnnAssign):
-            targets = [node.target]
-        else:
+def _function_returns(tree: ast.AST) -> dict[str, list[ast.AST]]:
+    returns: dict[str, list[ast.AST]] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-
-        for target in targets:
-            if isinstance(target, ast.Name):
-                assignments.setdefault(target.id, []).append(node.value)
-    return assignments
+        values = [child.value for child in ast.walk(node) if isinstance(child, ast.Return)]
+        if values:
+            returns.setdefault(node.name, []).extend(values)
+    return returns
 
 
 def _callback_contracts(
     node: ast.AST,
     prefixes: dict[str, str],
     location: str,
-    assignments: dict[str, list[ast.AST]],
+    function_returns: dict[str, list[ast.AST]],
+    seen_functions: set[str] | None = None,
 ) -> list[ButtonContract]:
-    if isinstance(node, ast.Name) and node.id in assignments:
-        contracts: list[ButtonContract] = []
-        for value in assignments[node.id]:
-            contracts.extend(
-                _callback_contracts(value, prefixes, location, assignments)
-            )
-        return contracts
+    seen_functions = set() if seen_functions is None else seen_functions
+
+    if isinstance(node, ast.Call):
+        function_name = _name(node.func)
+        if function_name in function_returns and function_name not in seen_functions:
+            seen_functions.add(function_name)
+            contracts: list[ButtonContract] = []
+            for value in function_returns[function_name]:
+                contracts.extend(
+                    _callback_contracts(
+                        value,
+                        prefixes,
+                        location,
+                        function_returns,
+                        seen_functions,
+                    )
+                )
+            return contracts
 
     contract = _callback_contract(node, prefixes, location)
     return [contract] if contract is not None else []
@@ -137,75 +142,52 @@ def _button_contracts() -> list[ButtonContract]:
 
     for path in _source_files("keyboards"):
         tree = ast.parse(path.read_text(), filename=str(path))
-        functions = [
-            node
-            for node in ast.walk(tree)
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        ]
-        scopes: list[tuple[ast.AST, dict[str, list[ast.AST]]]] = [(tree, {})]
-        scopes.extend(
-            (function, _local_assignments(function)) for function in functions
-        )
+        function_returns = _function_returns(tree)
 
-        for scope, assignments in scopes:
-            for node in ast.walk(scope):
-                if not isinstance(node, ast.Call):
-                    continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
 
-                name = _name(node.func)
-                kwargs = {keyword.arg: keyword.value for keyword in node.keywords}
-                location = f"{path.relative_to(ROOT)}:{node.lineno}"
+            name = _name(node.func)
+            kwargs = {keyword.arg: keyword.value for keyword in node.keywords}
+            location = f"{path.relative_to(ROOT)}:{node.lineno}"
 
-                if name == "InlineKeyboardButton":
-                    callback_data = kwargs.get("callback_data")
-                    if callback_data is not None:
-                        contracts = _callback_contracts(
-                            callback_data,
-                            prefixes,
-                            location,
-                            assignments,
-                        )
-                        assert contracts, (
-                            "Unsupported callback_data expression at "
-                            f"{location}"
-                        )
-                        result.extend(contracts)
-
-                elif name == "KeyboardButton":
-                    text = (
-                        _literal(kwargs.get("text"))
-                        if kwargs.get("text") is not None
-                        else None
+            if name == "InlineKeyboardButton":
+                callback_data = kwargs.get("callback_data")
+                if callback_data is not None:
+                    contracts = _callback_contracts(
+                        callback_data,
+                        prefixes,
+                        location,
+                        function_returns,
                     )
-                    if isinstance(text, str):
-                        result.append(
-                            ButtonContract("message", text, location=location)
-                        )
+                    assert contracts, (
+                        "Unsupported callback_data expression at "
+                        f"{location}"
+                    )
+                    result.extend(contracts)
 
-                elif (
-                    isinstance(node.func, ast.Attribute)
-                    and node.func.attr == "button"
-                ):
-                    callback_data = kwargs.get("callback_data")
-                    if callback_data is not None:
-                        contracts = _callback_contracts(
-                            callback_data,
-                            prefixes,
-                            location,
-                            assignments,
-                        )
-                        assert contracts, (
-                            "Unsupported callback_data expression at "
-                            f"{location}"
-                        )
-                        result.extend(contracts)
+            elif name == "KeyboardButton":
+                text = _literal(kwargs.get("text"))
+                if isinstance(text, str):
+                    result.append(ButtonContract("message", text, location=location))
 
-    unique: dict[
-        tuple[str, str, tuple[tuple[str, object], ...], str], ButtonContract
-    ] = {}
-    for button in result:
-        unique[(button.kind, button.key, button.constraints, button.location)] = button
-    return list(unique.values())
+            elif isinstance(node.func, ast.Attribute) and node.func.attr == "button":
+                callback_data = kwargs.get("callback_data")
+                if callback_data is not None:
+                    contracts = _callback_contracts(
+                        callback_data,
+                        prefixes,
+                        location,
+                        function_returns,
+                    )
+                    assert contracts, (
+                        "Unsupported callback_data expression at "
+                        f"{location}"
+                    )
+                    result.extend(contracts)
+
+    return result
 
 
 def _constraints_from_filter(node: ast.AST) -> list[tuple[str, object]]:
@@ -215,15 +197,13 @@ def _constraints_from_filter(node: ast.AST) -> list[tuple[str, object]]:
             isinstance(child, ast.Compare)
             and len(child.ops) == 1
             and isinstance(child.ops[0], ast.Eq)
+            and isinstance(child.left, ast.Attribute)
+            and isinstance(child.left.value, ast.Name)
+            and child.left.value.id == "F"
         ):
-            if (
-                isinstance(child.left, ast.Attribute)
-                and isinstance(child.left.value, ast.Name)
-                and child.left.value.id == "F"
-            ):
-                value = _literal(child.comparators[0])
-                if value is not None:
-                    constraints.append((child.left.attr, value))
+            value = _literal(child.comparators[0])
+            if value is not None:
+                constraints.append((child.left.attr, value))
         elif (
             isinstance(child, ast.Call)
             and isinstance(child.func, ast.Attribute)
@@ -234,19 +214,16 @@ def _constraints_from_filter(node: ast.AST) -> list[tuple[str, object]]:
                 isinstance(target, ast.Attribute)
                 and isinstance(target.value, ast.Name)
                 and target.value.id == "F"
+                and child.args
+                and isinstance(child.args[0], (ast.Set, ast.List, ast.Tuple))
             ):
-                values: list[object] = []
-                if child.args and isinstance(
-                    child.args[0], (ast.Set, ast.List, ast.Tuple)
-                ):
-                    for item in child.args[0].elts:
-                        value = _literal(item)
-                        if value is not None:
-                            values.append(value)
+                values = [
+                    value
+                    for item in child.args[0].elts
+                    if (value := _literal(item)) is not None
+                ]
                 if values:
-                    constraints.append(
-                        (target.attr, tuple(sorted(values, key=repr)))
-                    )
+                    constraints.append((target.attr, tuple(sorted(values, key=repr))))
     return constraints
 
 
@@ -259,18 +236,18 @@ def _handler_contracts() -> list[HandlerContract]:
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
+
             for decorator in node.decorator_list:
-                if not isinstance(decorator, ast.Call):
+                if not isinstance(decorator, ast.Call) or not isinstance(decorator.func, ast.Attribute):
                     continue
-                if not isinstance(decorator.func, ast.Attribute):
-                    continue
+
                 event_type = decorator.func.attr
                 if event_type not in {"callback_query", "message"}:
                     continue
 
-                kind = "callback" if event_type == "callback_query" else "message"
                 location = f"{path.relative_to(ROOT)}:{node.lineno} ({node.name})"
-                extracted: list[tuple[str, object]] = []
+                callback_class: str | None = None
+                constraints: list[tuple[str, object]] = []
 
                 for argument in decorator.args:
                     if (
@@ -278,81 +255,54 @@ def _handler_contracts() -> list[HandlerContract]:
                         and isinstance(argument.func, ast.Attribute)
                         and argument.func.attr == "filter"
                     ):
-                        callback_class = _name(argument.func.value)
-                        if callback_class in prefixes:
-                            extracted.append(("__callback_class__", callback_class))
-                            extracted.extend(_constraints_from_filter(argument))
-                    elif kind == "callback":
-                        extracted.extend(_constraints_from_filter(argument))
-
-                callback_class = next(
-                    (
-                        value
-                        for key, value in extracted
-                        if key == "__callback_class__"
-                    ),
-                    None,
-                )
-                constraints = tuple(
-                    sorted(
-                        (
-                            key,
-                            value,
-                        )
-                        for key, value in extracted
-                        if key != "__callback_class__"
-                    )
-                )
+                        candidate = _name(argument.func.value)
+                        if candidate in prefixes:
+                            callback_class = candidate
+                        constraints.extend(_constraints_from_filter(argument))
+                    else:
+                        constraints.extend(_constraints_from_filter(argument))
 
                 if callback_class is not None:
                     result.append(
                         HandlerContract(
-                            "callback",
-                            prefixes[callback_class],
-                            constraints,
+                            "callback_data",
+                            callback_class,
+                            tuple(sorted(constraints)),
                             location,
                         )
                     )
-                elif kind == "callback":
+                    continue
+
+                if event_type == "callback_query":
                     for child in ast.walk(decorator):
                         if (
                             isinstance(child, ast.Compare)
                             and len(child.ops) == 1
                             and isinstance(child.ops[0], ast.Eq)
+                            and isinstance(child.left, ast.Attribute)
+                            and isinstance(child.left.value, ast.Name)
+                            and child.left.value.id == "F"
+                            and child.left.attr == "data"
                         ):
-                            if (
-                                isinstance(child.left, ast.Attribute)
-                                and isinstance(child.left.value, ast.Name)
-                                and child.left.value.id == "F"
-                                and child.left.attr == "data"
-                            ):
-                                value = _literal(child.comparators[0])
-                                if isinstance(value, str):
-                                    result.append(
-                                        HandlerContract(
-                                            "callback", value, (), location
-                                        )
-                                    )
+                            value = _literal(child.comparators[0])
+                            if isinstance(value, str):
+                                result.append(
+                                    HandlerContract("callback_raw", value, (), location)
+                                )
                 else:
                     for child in ast.walk(decorator):
                         if (
                             isinstance(child, ast.Compare)
                             and len(child.ops) == 1
                             and isinstance(child.ops[0], ast.Eq)
+                            and isinstance(child.left, ast.Attribute)
+                            and isinstance(child.left.value, ast.Name)
+                            and child.left.value.id == "F"
+                            and child.left.attr == "text"
                         ):
-                            if (
-                                isinstance(child.left, ast.Attribute)
-                                and isinstance(child.left.value, ast.Name)
-                                and child.left.value.id == "F"
-                                and child.left.attr == "text"
-                            ):
-                                value = _literal(child.comparators[0])
-                                if isinstance(value, str):
-                                    result.append(
-                                        HandlerContract(
-                                            "message", value, (), location
-                                        )
-                                    )
+                            value = _literal(child.comparators[0])
+                            if isinstance(value, str):
+                                result.append(HandlerContract("message", value, (), location))
 
     return result
 
@@ -374,22 +324,6 @@ def _matches(button: ButtonContract, handler: HandlerContract) -> bool:
     return True
 
 
-def _included_handler_modules() -> set[str]:
-    main_source = (ROOT / "main.py").read_text()
-    tree = ast.parse(main_source, filename=str(ROOT / "main.py"))
-    modules: set[str] = set()
-
-    for node in tree.body:
-        if not isinstance(node, ast.ImportFrom) or node.module is None:
-            continue
-        if not node.module.startswith("handlers."):
-            continue
-        if any(alias.name == "router" for alias in node.names):
-            modules.add(node.module)
-
-    return modules
-
-
 def test_every_keyboard_action_has_a_matching_handler():
     buttons = _button_contracts()
     handlers = _handler_contracts()
@@ -403,7 +337,7 @@ def test_every_keyboard_action_has_a_matching_handler():
     assert not missing, "Buttons without a matching handler:\n- " + "\n- ".join(missing)
 
 
-def test_no_duplicate_exact_handler_contracts():
+def test_no_duplicate_conflicting_handler_contracts():
     handlers = _handler_contracts()
     seen: dict[tuple[str, str, tuple[tuple[str, object], ...]], str] = {}
     duplicates: list[str] = []
@@ -415,7 +349,21 @@ def test_no_duplicate_exact_handler_contracts():
         else:
             seen[key] = handler.location
 
-    assert not duplicates, "Duplicate exact handler contracts:\n- " + "\n- ".join(duplicates)
+    assert not duplicates, "Conflicting duplicate handler contracts:\n- " + "\n- ".join(duplicates)
+
+
+def _included_handler_modules() -> set[str]:
+    main_source = (ROOT / "main.py").read_text()
+    tree = ast.parse(main_source, filename=str(ROOT / "main.py"))
+    modules: set[str] = set()
+
+    for node in tree.body:
+        if not isinstance(node, ast.ImportFrom) or node.module is None:
+            continue
+        if node.module.startswith("handlers.") and any(alias.name == "router" for alias in node.names):
+            modules.add(node.module)
+
+    return modules
 
 
 def test_every_handler_router_is_included_in_main():
