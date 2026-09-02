@@ -374,6 +374,22 @@ def _matches(button: ButtonContract, handler: HandlerContract) -> bool:
     return True
 
 
+def _included_handler_modules() -> set[str]:
+    main_source = (ROOT / "main.py").read_text()
+    tree = ast.parse(main_source, filename=str(ROOT / "main.py"))
+    modules: set[str] = set()
+
+    for node in tree.body:
+        if not isinstance(node, ast.ImportFrom) or node.module is None:
+            continue
+        if not node.module.startswith("handlers."):
+            continue
+        if any(alias.name == "router" for alias in node.names):
+            modules.add(node.module)
+
+    return modules
+
+
 def test_every_keyboard_action_has_a_matching_handler():
     buttons = _button_contracts()
     handlers = _handler_contracts()
@@ -400,3 +416,15 @@ def test_no_duplicate_exact_handler_contracts():
             seen[key] = handler.location
 
     assert not duplicates, "Duplicate exact handler contracts:\n- " + "\n- ".join(duplicates)
+
+
+def test_every_handler_router_is_included_in_main():
+    handler_modules = {
+        f"handlers.{path.stem}"
+        for path in _source_files("handlers")
+        if path.name != "__init__.py"
+    }
+    included = _included_handler_modules()
+    missing = sorted(handler_modules - included)
+
+    assert not missing, "Handler routers not included in main.py:\n- " + "\n- ".join(missing)
