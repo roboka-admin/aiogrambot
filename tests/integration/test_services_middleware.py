@@ -64,8 +64,8 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
 
     user_repository.assert_called_once_with(session)
     support_repository.assert_called_once_with(session)
-    broadcast_repository.assert_called_once_with(session)
     antispam_repository.assert_called_once_with(session)
+    broadcast_repository.assert_not_called()
 
     register_service.assert_called_once_with(
         user_repository=user_repository.return_value,
@@ -77,9 +77,8 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
         support_repository=support_repository.return_value,
     )
     broadcast_service.assert_called_once_with(
-        user_repository=user_repository.return_value,
-        broadcast_repository=broadcast_repository.return_value,
         bot=bot,
+        repository_factory=broadcast_service.call_args.kwargs["repository_factory"],
     )
     antispam_service.assert_called_once_with(
         antispam_repository=antispam_repository.return_value,
