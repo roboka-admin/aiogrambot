@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
@@ -9,7 +10,7 @@ from repositories.broadcast import BroadcastRepository
 from repositories.support import SupportRepository
 from repositories.user import UserRepository
 from services.antispam import AntiSpamService
-from services.broadcast import BroadcastService
+from services.broadcast import BroadcastRepositoryFactory, BroadcastService
 from services.notification import NotificationService
 from services.register import RegisterService
 from services.support import SupportService
@@ -37,8 +38,16 @@ class ServicesMiddleware(BaseMiddleware):
             async with session.begin():
                 user_repository = UserRepository(session)
                 support_repository = SupportRepository(session)
-                broadcast_repository = BroadcastRepository(session)
                 antispam_repository = AntiSpamRepository(session)
+
+                @asynccontextmanager
+                async def broadcast_repository_scope():
+                    async with self._database.get_session() as broadcast_session:
+                        async with broadcast_session.begin():
+                            yield (
+                                UserRepository(broadcast_session),
+                                BroadcastRepository(broadcast_session),
+                            )
 
                 register_service = RegisterService(
                     user_repository=user_repository,
@@ -50,9 +59,10 @@ class ServicesMiddleware(BaseMiddleware):
                     support_repository=support_repository,
                 )
                 broadcast_service = BroadcastService(
-                    user_repository=user_repository,
-                    broadcast_repository=broadcast_repository,
                     bot=data["bot"],
+                    repository_factory=(
+                        broadcast_repository_scope
+                    ),
                 )
                 antispam_service = AntiSpamService(
                     antispam_repository=antispam_repository,
