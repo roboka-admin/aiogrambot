@@ -7,11 +7,12 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from models.base import Base
+from models.bot_settings_db import BotSettingsRecord
 
 
 @pytest.mark.asyncio
 async def test_initial_migration_builds_test_database_from_empty_schema() -> None:
-    """Verify the real Alembic migration can build the dedicated test DB from scratch."""
+    """Verify the real Alembic migration chain can build the dedicated test DB from scratch."""
     database_url = os.getenv("TEST_DATABASE_URL")
     if not database_url:
         raise RuntimeError("TEST_DATABASE_URL is not configured")
@@ -44,6 +45,7 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
         # Alembic writes its logging output to stderr, so inspect both streams.
         output = result.stdout + result.stderr
         assert "Running upgrade  -> 0001_initial_schema" in output
+        assert "0001_initial_schema -> 0002_add_bot_settings" in output
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
             tables = set(
@@ -58,14 +60,21 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
                     text("SELECT version_num FROM alembic_version")
                 )
             ).scalar_one()
+            settings_count = (
+                await session.execute(
+                    text("SELECT COUNT(*) FROM bot_settings WHERE id = 1")
+                )
+            ).scalar_one()
 
         assert {
             "users",
             "support_tickets",
             "broadcast_records",
             "antispam_events",
+            "bot_settings",
             "alembic_version",
         }.issubset(tables)
-        assert revision == "0001_initial_schema"
+        assert revision == "0002_add_bot_settings"
+        assert settings_count == 1
     finally:
         await engine.dispose()
