@@ -30,11 +30,7 @@ async def toggle_bot_handler(
     bot_settings_service: BotSettingsService,
 ) -> None:
     settings = await bot_settings_service.toggle_bot()
-    await callback.message.edit_text(
-        _settings_text(settings),
-        reply_markup=admin_settings_keyboard(settings),
-    )
-    await callback.answer("وضعیت ربات تغییر کرد.")
+    await _update_settings_message(callback, settings, "وضعیت ربات تغییر کرد.")
 
 
 @router.callback_query(F.data == "admin_settings_toggle_maintenance")
@@ -43,11 +39,7 @@ async def toggle_maintenance_handler(
     bot_settings_service: BotSettingsService,
 ) -> None:
     settings = await bot_settings_service.toggle_maintenance()
-    await callback.message.edit_text(
-        _settings_text(settings),
-        reply_markup=admin_settings_keyboard(settings),
-    )
-    await callback.answer("حالت تعمیرات تغییر کرد.")
+    await _update_settings_message(callback, settings, "حالت تعمیرات تغییر کرد.")
 
 
 @router.callback_query(F.data == "admin_settings_refresh")
@@ -56,11 +48,28 @@ async def refresh_settings_handler(
     bot_settings_service: BotSettingsService,
 ) -> None:
     settings = await bot_settings_service.get_settings()
-    await callback.message.edit_text(
-        _settings_text(settings),
-        reply_markup=admin_settings_keyboard(settings),
-    )
-    await callback.answer("بروزرسانی شد.")
+    await _update_settings_message(callback, settings, "بروزرسانی شد.")
+
+
+async def _update_settings_message(
+    callback: CallbackQuery,
+    settings: BotSettings,
+    answer_text: str,
+) -> None:
+    text = _settings_text(settings)
+    keyboard = admin_settings_keyboard(settings)
+
+    if callback.message is not None:
+        if callback.message.text == text and callback.message.reply_markup == keyboard:
+            await callback.answer(answer_text)
+            return
+
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+        )
+
+    await callback.answer(answer_text)
 
 
 def _settings_text(settings: BotSettings) -> str:
