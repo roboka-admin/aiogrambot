@@ -97,7 +97,7 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
 
 
 @pytest.mark.asyncio
-async def test_services_middleware_keeps_transaction_open_until_handler_finishes():
+async def test_services_middleware_passes_handler_exception_through_transaction():
     session = MagicMock()
     database = FakeDatabase(session)
     session.begin.return_value = database.transaction
@@ -105,8 +105,7 @@ async def test_services_middleware_keeps_transaction_open_until_handler_finishes
     bot = Bot("42:TEST")
 
     async def handler(event, data):
-        assert database.transaction.exited_with is None
-        return "handled"
+        raise RuntimeError("handler failed")
 
     with (
         patch("middlewares.services.UserRepository"),
@@ -124,7 +123,7 @@ async def test_services_middleware_keeps_transaction_open_until_handler_finishes
             database=database,
             system_service=system_service,
         )
-        result = await middleware(handler, MagicMock(), {"bot": bot})
+        with pytest.raises(RuntimeError, match="handler failed"):
+            await middleware(handler, MagicMock(), {"bot": bot})
 
-    assert result == "handled"
-    assert database.transaction.exited_with is None
+    assert database.transaction.exited_with is RuntimeError
