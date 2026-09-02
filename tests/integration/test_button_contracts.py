@@ -36,6 +36,35 @@ def _literal(node: ast.AST | None) -> object | None:
     return None
 
 
+def _literal_values(
+    node: ast.AST | None,
+    variable_values: dict[str, list[ast.AST]],
+    seen: set[str] | None = None,
+) -> list[object]:
+    """Resolve literal values used indirectly in callback constructor fields."""
+    seen = set() if seen is None else seen
+
+    value = _literal(node)
+    if value is not None:
+        return [value]
+
+    if isinstance(node, ast.Name):
+        if node.id in seen or node.id not in variable_values:
+            return []
+        seen.add(node.id)
+        result: list[object] = []
+        for assigned_value in variable_values[node.id]:
+            result.extend(_literal_values(assigned_value, variable_values, seen.copy()))
+        return result
+
+    if isinstance(node, ast.IfExp):
+        return _literal_values(node.body, variable_values, seen.copy()) + _literal_values(
+            node.orelse, variable_values, seen.copy()
+        )
+
+    return []
+
+
 def _name(node: ast.AST) -> str | None:
     if isinstance(node, ast.Name):
         return node.id
@@ -65,9 +94,10 @@ def _callback_contract(
     node: ast.AST,
     prefixes: dict[str, str],
     location: str,
-) -> ButtonContract | None:
+    variable_values: dict[str, list[ast.AST]],
+) -> list[ButtonContract]:
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return ButtonContract("callback_raw", node.value, location=location)
+        return [ButtonContract("callback_raw", node.value, location=location)]
 
     call = node
     if (
@@ -80,18 +110,30 @@ def _callback_contract(
     if isinstance(call, ast.Call):
         class_name = _name(call.func)
         if class_name in prefixes:
-            constraints = []
+            resolved_constraints: list[list[tuple[str, object]]] = []
             for keyword in call.keywords:
-                value = _literal(keyword.value)
-                if value is not None:
-                    constraints.append((keyword.arg or "", value))
-            return ButtonContract(
-                "callback_data",
-                class_name,
-                tuple(sorted(constraints)),
-                location,
-            )
-    return None
+                values = _literal_values(keyword.value, variable_values)
+                if values:
+                    resolved_constraints.append(
+                        [(keyword.arg or "", value) for value in values]
+                    )
+
+            contracts = [
+                ButtonContract("callback_data", class_name, (), location)
+            ]
+            for field_constraints in resolved_constraints:
+                contracts = [
+                    ButtonContract(
+                        contract.kind,
+                        contract.key,
+                        tuple(sorted((*contract.constraints, constraint))),
+                        contract.location,
+                    )
+                    for contract in contracts
+                    for constraint in field_constraints
+                ]
+            return contracts
+    return []
 
 
 def _function_returns(tree: ast.AST) -> dict[str, list[ast.AST]]:
@@ -181,8 +223,7 @@ def _callback_contracts(
                 )
             return result
 
-    contract = _callback_contract(node, prefixes, location)
-    return [contract] if contract is not None else []
+    return _callback_contract(node, prefixes, location, variable_values)
 
 
 def _button_contracts() -> list[ButtonContract]:
