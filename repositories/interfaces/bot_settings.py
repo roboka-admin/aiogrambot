@@ -1,0 +1,9 @@
+from typing import Protocol
+
+from models.bot_settings import BotSettings
+
+
+class IBotSettingsRepository(Protocol):
+    async def get(self) -> BotSettings | None: ...
+    async def create(self, settings: BotSettings) -> BotSettings: ...
+    async def update(self, settings: BotSettings) -> BotSettings: ...
