@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from typing import Any, Awaitable, Callable
 
@@ -24,6 +25,7 @@ class ServicesMiddleware(BaseMiddleware):
     def __init__(self, *, database: Database, system_service: SystemService) -> None:
         self._database = database
         self._system_service = system_service
+        self._broadcast_lock = asyncio.Lock()
 
     async def __call__(
         self,
@@ -61,6 +63,7 @@ class ServicesMiddleware(BaseMiddleware):
                 broadcast_service = BroadcastService(
                     bot=data["bot"],
                     repository_factory=broadcast_repository_scope,
+                    broadcast_lock=self._broadcast_lock,
                 )
                 antispam_service = AntiSpamService(
                     antispam_repository=antispam_repository,

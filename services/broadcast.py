@@ -71,6 +71,7 @@ class BroadcastService:
         user_repository: IUserRepository | None = None,
         broadcast_repository: IBroadcastRepository | None = None,
         repository_factory: BroadcastRepositoryFactory | None = None,
+        broadcast_lock: asyncio.Lock | None = None,
     ) -> None:
         if repository_factory is None and (
             user_repository is None or broadcast_repository is None
@@ -83,6 +84,7 @@ class BroadcastService:
         self._broadcast_repository = broadcast_repository
         self._repository_factory = repository_factory
         self._bot = bot
+        self._broadcast_lock = broadcast_lock
 
     @asynccontextmanager
     async def _repositories(
@@ -156,6 +158,30 @@ class BroadcastService:
         if progress_interval < 1:
             raise ValueError("progress_interval must be at least 1")
 
+        if self._broadcast_lock is None:
+            return await self._broadcast_unlocked(
+                from_chat_id=from_chat_id,
+                message_id=message_id,
+                progress_callback=progress_callback,
+                progress_interval=progress_interval,
+            )
+
+        async with self._broadcast_lock:
+            return await self._broadcast_unlocked(
+                from_chat_id=from_chat_id,
+                message_id=message_id,
+                progress_callback=progress_callback,
+                progress_interval=progress_interval,
+            )
+
+    async def _broadcast_unlocked(
+        self,
+        *,
+        from_chat_id: int,
+        message_id: int,
+        progress_callback: ProgressCallback | None,
+        progress_interval: int,
+    ) -> BroadcastResult:
         async with self._repositories() as (user_repository, _):
             telegram_ids = await user_repository.list_active_telegram_ids()
 
