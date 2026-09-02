@@ -27,8 +27,12 @@ class BotSettingsService:
 
     async def toggle_bot(self) -> BotSettings:
         settings = await self.get_settings()
-        return await self.set_bot_enabled(not settings.bot_enabled)
+        settings.bot_enabled = not settings.bot_enabled
+        settings.updated_at = tehran_now()
+        return await self._bot_settings_repository.update(settings)
 
     async def toggle_maintenance(self) -> BotSettings:
         settings = await self.get_settings()
-        return await self.set_maintenance_mode(not settings.maintenance_mode)
+        settings.maintenance_mode = not settings.maintenance_mode
+        settings.updated_at = tehran_now()
+        return await self._bot_settings_repository.update(settings)
