@@ -10,7 +10,7 @@ from repositories.broadcast import BroadcastRepository
 from repositories.support import SupportRepository
 from repositories.user import UserRepository
 from services.antispam import AntiSpamService
-from services.broadcast import BroadcastRepositoryFactory, BroadcastService
+from services.broadcast import BroadcastService
 from services.notification import NotificationService
 from services.register import RegisterService
 from services.support import SupportService
@@ -60,9 +60,7 @@ class ServicesMiddleware(BaseMiddleware):
                 )
                 broadcast_service = BroadcastService(
                     bot=data["bot"],
-                    repository_factory=(
-                        broadcast_repository_scope
-                    ),
+                    repository_factory=broadcast_repository_scope,
                 )
                 antispam_service = AntiSpamService(
                     antispam_repository=antispam_repository,
