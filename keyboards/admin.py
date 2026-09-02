@@ -9,7 +9,6 @@ admin_menu = ReplyKeyboardMarkup(
             KeyboardButton(text="📊 آمار"),
             KeyboardButton(text="📢 ارسال همگانی"),
         ],
-        [KeyboardButton(text="⚙️ تنظیمات")],
     ],
     resize_keyboard=True,
 )
