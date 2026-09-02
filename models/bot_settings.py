@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from core.timezone import tehran_now
@@ -15,4 +15,4 @@ class BotSettings:
     maintenance_mode: bool = False
     offline_message: str = DEFAULT_OFFLINE_MESSAGE
     maintenance_message: str = DEFAULT_MAINTENANCE_MESSAGE
-    updated_at: datetime = tehran_now()
+    updated_at: datetime = field(default_factory=tehran_now)
