@@ -44,9 +44,11 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
         patch("middlewares.services.SupportRepository") as support_repository,
         patch("middlewares.services.BroadcastRepository") as broadcast_repository,
         patch("middlewares.services.AntiSpamRepository") as antispam_repository,
+        patch("middlewares.services.BotSettingsRepository") as bot_settings_repository,
         patch("middlewares.services.RegisterService") as register_service,
         patch("middlewares.services.UserService") as user_service,
         patch("middlewares.services.SupportService") as support_service,
+        patch("middlewares.services.BotSettingsService") as bot_settings_service,
         patch("middlewares.services.BroadcastService") as broadcast_service,
         patch("middlewares.services.AntiSpamService") as antispam_service,
         patch("middlewares.services.NotificationService") as notification_service,
@@ -65,6 +67,7 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     user_repository.assert_called_once_with(session)
     support_repository.assert_called_once_with(session)
     antispam_repository.assert_called_once_with(session)
+    bot_settings_repository.assert_called_once_with(session)
     broadcast_repository.assert_not_called()
 
     register_service.assert_called_once_with(
@@ -75,6 +78,9 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     )
     support_service.assert_called_once_with(
         support_repository=support_repository.return_value,
+    )
+    bot_settings_service.assert_called_once_with(
+        bot_settings_repository=bot_settings_repository.return_value,
     )
     broadcast_service.assert_called_once()
     broadcast_service_kwargs = broadcast_service.call_args.kwargs
@@ -89,6 +95,7 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     assert data["register_service"] is register_service.return_value
     assert data["user_service"] is user_service.return_value
     assert data["support_service"] is support_service.return_value
+    assert data["bot_settings_service"] is bot_settings_service.return_value
     assert data["broadcast_service"] is broadcast_service.return_value
     assert data["antispam_service"] is antispam_service.return_value
     assert data["notification_service"] is notification_service.return_value
@@ -112,9 +119,11 @@ async def test_services_middleware_passes_handler_exception_through_transaction(
         patch("middlewares.services.SupportRepository"),
         patch("middlewares.services.BroadcastRepository"),
         patch("middlewares.services.AntiSpamRepository"),
+        patch("middlewares.services.BotSettingsRepository"),
         patch("middlewares.services.RegisterService"),
         patch("middlewares.services.UserService"),
         patch("middlewares.services.SupportService"),
+        patch("middlewares.services.BotSettingsService"),
         patch("middlewares.services.BroadcastService"),
         patch("middlewares.services.AntiSpamService"),
         patch("middlewares.services.NotificationService"),
