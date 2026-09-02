@@ -76,10 +76,11 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     support_service.assert_called_once_with(
         support_repository=support_repository.return_value,
     )
-    broadcast_service.assert_called_once_with(
-        bot=bot,
-        repository_factory=broadcast_service.call_args.kwargs["repository_factory"],
-    )
+    broadcast_service.assert_called_once()
+    broadcast_service_kwargs = broadcast_service.call_args.kwargs
+    assert broadcast_service_kwargs["bot"] is bot
+    assert callable(broadcast_service_kwargs["repository_factory"])
+    assert broadcast_service_kwargs["broadcast_lock"] is middleware._broadcast_lock
     antispam_service.assert_called_once_with(
         antispam_repository=antispam_repository.return_value,
     )
