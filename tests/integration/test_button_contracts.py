@@ -148,6 +148,21 @@ def _callback_contracts(
                 )
             return result
 
+    if isinstance(node, ast.IfExp):
+        result: list[ButtonContract] = []
+        for branch in (node.body, node.orelse):
+            result.extend(
+                _callback_contracts(
+                    branch,
+                    prefixes,
+                    location,
+                    function_returns,
+                    variable_values,
+                    seen.copy(),
+                )
+            )
+        return result
+
     if isinstance(node, ast.Call):
         function_name = _name(node.func)
         if function_name in function_returns and ("function", function_name) not in seen:
