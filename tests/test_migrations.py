@@ -6,8 +6,20 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+from models.antispam_db import AntiSpamEventRecord
 from models.base import Base
 from models.bot_settings_db import BotSettingsRecord
+from models.broadcast_db import BroadcastRecordRecord
+from models.support_db import SupportTicketRecord
+from models.user_db import UserRecord
+
+_ = (
+    UserRecord,
+    SupportTicketRecord,
+    BroadcastRecordRecord,
+    AntiSpamEventRecord,
+    BotSettingsRecord,
+)
 
 
 @pytest.mark.asyncio
