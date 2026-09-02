@@ -17,13 +17,11 @@ def admin_settings_keyboard(settings: BotSettings) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=bot_label,
                     callback_data="admin_settings_toggle_bot",
-                )
-            ],
-            [
+                ),
                 InlineKeyboardButton(
                     text=maintenance_label,
                     callback_data="admin_settings_toggle_maintenance",
-                )
+                ),
             ],
             [
                 InlineKeyboardButton(
