@@ -8,6 +8,7 @@ from core.database import Database
 from handlers.admin import router as admin_router
 from handlers.admin_broadcast import router as admin_broadcast_router
 from handlers.admin_cancel import router as admin_cancel_router
+from handlers.admin_settings import router as admin_settings_router
 from handlers.admin_support import router as admin_support_router
 from handlers.admin_support_settings import router as admin_support_settings_router
 from handlers.admin_system_stats import router as admin_system_stats_router
@@ -18,6 +19,7 @@ from handlers.start import router as start_router
 from handlers.support import router as support_router
 from middlewares.anti_spam import AntiSpamMiddleware
 from middlewares.logging import LoggingMiddleware
+from middlewares.maintenance import MaintenanceMiddleware
 from middlewares.services import ServicesMiddleware
 from middlewares.user import UserMiddleware
 from services.system import SystemService
@@ -41,6 +43,7 @@ async def main() -> None:
     dp.update.middleware(
         ServicesMiddleware(database=database, system_service=system_service)
     )
+    dp.update.middleware(MaintenanceMiddleware())
     dp.update.middleware(UserMiddleware())
 
     dp.message.outer_middleware(AntiSpamMiddleware())
@@ -55,6 +58,7 @@ async def main() -> None:
     dp.include_router(admin_router)
     dp.include_router(admin_cancel_router)
     dp.include_router(admin_broadcast_router)
+    dp.include_router(admin_settings_router)
     dp.include_router(admin_support_settings_router)
     dp.include_router(admin_support_router)
 
