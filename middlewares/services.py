@@ -7,10 +7,12 @@ from aiogram.types import TelegramObject
 
 from core.database import Database
 from repositories.antispam import AntiSpamRepository
+from repositories.bot_settings import BotSettingsRepository
 from repositories.broadcast import BroadcastRepository
 from repositories.support import SupportRepository
 from repositories.user import UserRepository
 from services.antispam import AntiSpamService
+from services.bot_settings import BotSettingsService
 from services.broadcast import BroadcastService
 from services.notification import NotificationService
 from services.register import RegisterService
@@ -41,6 +43,7 @@ class ServicesMiddleware(BaseMiddleware):
                 user_repository = UserRepository(session)
                 support_repository = SupportRepository(session)
                 antispam_repository = AntiSpamRepository(session)
+                bot_settings_repository = BotSettingsRepository(session)
 
                 @asynccontextmanager
                 async def broadcast_repository_scope():
@@ -60,6 +63,9 @@ class ServicesMiddleware(BaseMiddleware):
                 support_service = SupportService(
                     support_repository=support_repository,
                 )
+                bot_settings_service = BotSettingsService(
+                    bot_settings_repository=bot_settings_repository,
+                )
                 broadcast_service = BroadcastService(
                     bot=data["bot"],
                     repository_factory=broadcast_repository_scope,
@@ -73,6 +79,7 @@ class ServicesMiddleware(BaseMiddleware):
                 data["register_service"] = register_service
                 data["user_service"] = user_service
                 data["support_service"] = support_service
+                data["bot_settings_service"] = bot_settings_service
                 data["broadcast_service"] = broadcast_service
                 data["antispam_service"] = antispam_service
                 data["notification_service"] = notification_service
