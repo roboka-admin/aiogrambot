@@ -42,15 +42,6 @@ async def toggle_maintenance_handler(
     await _update_settings_message(callback, settings, "حالت تعمیرات تغییر کرد.")
 
 
-@router.callback_query(F.data == "admin_settings_refresh")
-async def refresh_settings_handler(
-    callback: CallbackQuery,
-    bot_settings_service: BotSettingsService,
-) -> None:
-    settings = await bot_settings_service.get_settings()
-    await _update_settings_message(callback, settings, "بروزرسانی شد.")
-
-
 async def _update_settings_message(
     callback: CallbackQuery,
     settings: BotSettings,
