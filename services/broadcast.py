@@ -67,11 +67,18 @@ class BroadcastService:
     def __init__(
         self,
         *,
-        user_repository: IUserRepository,
-        broadcast_repository: IBroadcastRepository,
         bot: Bot,
+        user_repository: IUserRepository | None = None,
+        broadcast_repository: IBroadcastRepository | None = None,
         repository_factory: BroadcastRepositoryFactory | None = None,
     ) -> None:
+        if repository_factory is None and (
+            user_repository is None or broadcast_repository is None
+        ):
+            raise ValueError(
+                "repository_factory or both repositories must be provided"
+            )
+
         self._user_repository = user_repository
         self._broadcast_repository = broadcast_repository
         self._repository_factory = repository_factory
@@ -86,6 +93,8 @@ class BroadcastService:
                 yield repositories
             return
 
+        assert self._user_repository is not None
+        assert self._broadcast_repository is not None
         yield self._user_repository, self._broadcast_repository
 
     async def count_recipients(self) -> int:
