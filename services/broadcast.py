@@ -1,7 +1,8 @@
 import asyncio
 import logging
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -23,6 +24,10 @@ logger = logging.getLogger(__name__)
 _SEND_DELAY_SECONDS = 0.05
 _MAX_RETRY_AFTER_ATTEMPTS = 3
 ProgressCallback = Callable[["BroadcastProgress"], Awaitable[None]]
+BroadcastRepositoryFactory = Callable[
+    [],
+    AbstractAsyncContextManager[tuple[IUserRepository, IBroadcastRepository]],
+]
 
 
 @dataclass(slots=True, frozen=True)
@@ -65,13 +70,27 @@ class BroadcastService:
         user_repository: IUserRepository,
         broadcast_repository: IBroadcastRepository,
         bot: Bot,
+        repository_factory: BroadcastRepositoryFactory | None = None,
     ) -> None:
         self._user_repository = user_repository
         self._broadcast_repository = broadcast_repository
+        self._repository_factory = repository_factory
         self._bot = bot
 
+    @asynccontextmanager
+    async def _repositories(
+        self,
+    ) -> AsyncIterator[tuple[IUserRepository, IBroadcastRepository]]:
+        if self._repository_factory is not None:
+            async with self._repository_factory() as repositories:
+                yield repositories
+            return
+
+        yield self._user_repository, self._broadcast_repository
+
     async def count_recipients(self) -> int:
-        return len(await self._user_repository.list_active_telegram_ids())
+        async with self._repositories() as (user_repository, _):
+            return len(await user_repository.list_active_telegram_ids())
 
     async def get_broadcast_statistics(self) -> dict[str, int | float | str | None]:
         now = tehran_now()
@@ -79,12 +98,12 @@ class BroadcastService:
         seven_days_ago = today_start - timedelta(days=7)
         thirty_days_ago = today_start - timedelta(days=30)
 
-        total_broadcasts = await self._broadcast_repository.count_total()
-        today_count = await self._broadcast_repository.count_today(today_start)
-        last_7_days = await self._broadcast_repository.count_last_7_days(seven_days_ago)
-        last_30_days = await self._broadcast_repository.count_last_30_days(thirty_days_ago)
-
-        latest = await self._broadcast_repository.get_latest()
+        async with self._repositories() as (_, broadcast_repository):
+            total_broadcasts = await broadcast_repository.count_total()
+            today_count = await broadcast_repository.count_today(today_start)
+            last_7_days = await broadcast_repository.count_last_7_days(seven_days_ago)
+            last_30_days = await broadcast_repository.count_last_30_days(thirty_days_ago)
+            latest = await broadcast_repository.get_latest()
 
         if latest is None:
             return {
@@ -128,7 +147,9 @@ class BroadcastService:
         if progress_interval < 1:
             raise ValueError("progress_interval must be at least 1")
 
-        telegram_ids = await self._user_repository.list_active_telegram_ids()
+        async with self._repositories() as (user_repository, _):
+            telegram_ids = await user_repository.list_active_telegram_ids()
+
         total = len(telegram_ids)
         success = 0
         failed = 0
@@ -175,16 +196,17 @@ class BroadcastService:
             duration_seconds=round(time.monotonic() - started_at),
         )
 
-        await self._broadcast_repository.create(
-            BroadcastRecord(
-                id=None,
-                total_recipients=result.total,
-                success_count=result.success,
-                failed_count=result.failed,
-                duration_seconds=result.duration_seconds,
-                created_at=tehran_now(),
+        async with self._repositories() as (_, broadcast_repository):
+            await broadcast_repository.create(
+                BroadcastRecord(
+                    id=None,
+                    total_recipients=result.total,
+                    success_count=result.success,
+                    failed_count=result.failed,
+                    duration_seconds=result.duration_seconds,
+                    created_at=tehran_now(),
+                )
             )
-        )
 
         return result
 
