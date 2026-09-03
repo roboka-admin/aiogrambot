@@ -23,6 +23,7 @@ class BotSettingsRepository(IBotSettingsRepository):
             bot_enabled=settings.bot_enabled,
             maintenance_mode=settings.maintenance_mode,
             antispam_enabled=settings.antispam_enabled,
+            force_subscription_enabled=settings.force_subscription_enabled,
             offline_message=settings.offline_message,
             maintenance_message=settings.maintenance_message,
             updated_at=settings.updated_at,
@@ -42,6 +43,7 @@ class BotSettingsRepository(IBotSettingsRepository):
         record.bot_enabled = settings.bot_enabled
         record.maintenance_mode = settings.maintenance_mode
         record.antispam_enabled = settings.antispam_enabled
+        record.force_subscription_enabled = settings.force_subscription_enabled
         record.offline_message = settings.offline_message
         record.maintenance_message = settings.maintenance_message
         record.updated_at = settings.updated_at
@@ -55,6 +57,7 @@ class BotSettingsRepository(IBotSettingsRepository):
             bot_enabled=record.bot_enabled,
             maintenance_mode=record.maintenance_mode,
             antispam_enabled=record.antispam_enabled,
+            force_subscription_enabled=record.force_subscription_enabled,
             offline_message=record.offline_message,
             maintenance_message=record.maintenance_message,
             updated_at=record.updated_at,
