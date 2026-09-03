@@ -9,3 +9,7 @@ class AdminUserStates(StatesGroup):
 class AdminBroadcastStates(StatesGroup):
     waiting_message = State()
     waiting_confirmation = State()
+
+
+class AdminForceSubscriptionStates(StatesGroup):
+    waiting_for_chat = State()

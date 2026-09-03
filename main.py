@@ -8,6 +8,7 @@ from core.database import Database
 from handlers.admin import router as admin_router
 from handlers.admin_broadcast import router as admin_broadcast_router
 from handlers.admin_cancel import router as admin_cancel_router
+from handlers.admin_force_subscription import router as admin_force_subscription_router
 from handlers.admin_settings import router as admin_settings_router
 from handlers.admin_support import router as admin_support_router
 from handlers.admin_support_settings import router as admin_support_settings_router
@@ -42,9 +43,7 @@ async def main() -> None:
     system_service = SystemService(database=database)
 
     dp.update.middleware(LoggingMiddleware(system_service=system_service))
-    dp.update.middleware(
-        ServicesMiddleware(database=database, system_service=system_service)
-    )
+    dp.update.middleware(ServicesMiddleware(database=database, system_service=system_service))
     dp.update.middleware(MaintenanceMiddleware())
     dp.update.middleware(UserMiddleware())
     dp.update.middleware(ForceSubscriptionMiddleware())
@@ -63,6 +62,7 @@ async def main() -> None:
     dp.include_router(admin_cancel_router)
     dp.include_router(admin_broadcast_router)
     dp.include_router(admin_settings_router)
+    dp.include_router(admin_force_subscription_router)
     dp.include_router(admin_support_settings_router)
     dp.include_router(admin_support_router)
 

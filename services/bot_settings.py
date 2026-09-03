@@ -31,6 +31,12 @@ class BotSettingsService:
         settings.updated_at = tehran_now()
         return await self._bot_settings_repository.update(settings)
 
+    async def set_force_subscription_enabled(self, enabled: bool) -> BotSettings:
+        settings = await self.get_settings()
+        settings.force_subscription_enabled = enabled
+        settings.updated_at = tehran_now()
+        return await self._bot_settings_repository.update(settings)
+
     async def toggle_bot(self) -> BotSettings:
         settings = await self.get_settings()
         settings.bot_enabled = not settings.bot_enabled
@@ -46,5 +52,11 @@ class BotSettingsService:
     async def toggle_antispam(self) -> BotSettings:
         settings = await self.get_settings()
         settings.antispam_enabled = not settings.antispam_enabled
+        settings.updated_at = tehran_now()
+        return await self._bot_settings_repository.update(settings)
+
+    async def toggle_force_subscription(self) -> BotSettings:
+        settings = await self.get_settings()
+        settings.force_subscription_enabled = not settings.force_subscription_enabled
         settings.updated_at = tehran_now()
         return await self._bot_settings_repository.update(settings)
