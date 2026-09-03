@@ -19,8 +19,5 @@ def admin_settings_keyboard(settings: BotSettings) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text=antispam_label, callback_data="admin_settings_toggle_antispam"),
                 InlineKeyboardButton(text=force_label, callback_data="admin_settings_toggle_force_subscription"),
             ],
-            [
-                InlineKeyboardButton(text="📢 مدیریت عضویت اجباری", callback_data="admin_force_subscription_manage"),
-            ],
         ]
     )
