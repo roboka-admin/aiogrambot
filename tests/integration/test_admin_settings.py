@@ -35,13 +35,12 @@ async def test_settings_update_edits_when_message_is_stale() -> None:
     callback.answer.assert_awaited_once_with("وضعیت ربات تغییر کرد.")
 
 
-def test_settings_keyboard_has_three_row_layout() -> None:
+def test_settings_keyboard_has_two_row_layout() -> None:
     keyboard = admin_settings_keyboard(BotSettings())
 
-    assert len(keyboard.inline_keyboard) == 3
+    assert len(keyboard.inline_keyboard) == 2
     assert len(keyboard.inline_keyboard[0]) == 2
     assert len(keyboard.inline_keyboard[1]) == 2
-    assert len(keyboard.inline_keyboard[2]) == 1
 
     assert [button.callback_data for button in keyboard.inline_keyboard[0]] == [
         "admin_settings_toggle_bot",
@@ -51,7 +50,6 @@ def test_settings_keyboard_has_three_row_layout() -> None:
         "admin_settings_toggle_antispam",
         "admin_settings_toggle_force_subscription",
     ]
-    assert keyboard.inline_keyboard[2][0].callback_data == "admin_force_subscription_manage"
 
 
 def test_settings_keyboard_antispam_and_force_subscription_labels_reflect_state() -> None:
