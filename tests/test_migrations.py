@@ -10,6 +10,7 @@ from models.antispam_db import AntiSpamEventRecord
 from models.base import Base
 from models.bot_settings_db import BotSettingsRecord
 from models.broadcast_db import BroadcastRecordRecord
+from models.force_subscription_db import ForceSubscriptionTargetRecord
 from models.support_db import SupportTicketRecord
 from models.user_db import UserRecord
 
@@ -19,6 +20,7 @@ _ = (
     BroadcastRecordRecord,
     AntiSpamEventRecord,
     BotSettingsRecord,
+    ForceSubscriptionTargetRecord,
 )
 
 
@@ -54,31 +56,28 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
             text=True,
         )
 
-        # Alembic writes its logging output to stderr, so inspect both streams.
         output = result.stdout + result.stderr
         assert "Running upgrade  -> 0001_initial_schema" in output
         assert "0001_initial_schema -> 0002_add_bot_settings" in output
         assert "0002_add_bot_settings -> 0003_add_antispam_enabled" in output
+        assert "0003_add_antispam_enabled -> 0004_add_force_subscription" in output
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
-            tables = set(
-                (await session.execute(text("SHOW TABLES"))).scalars()
-            )
+            tables = set((await session.execute(text("SHOW TABLES"))).scalars())
             revision = (
-                await session.execute(
-                    text("SELECT version_num FROM alembic_version")
-                )
+                await session.execute(text("SELECT version_num FROM alembic_version"))
             ).scalar_one()
             settings_count = (
-                await session.execute(
-                    text("SELECT COUNT(*) FROM bot_settings WHERE id = 1")
-                )
+                await session.execute(text("SELECT COUNT(*) FROM bot_settings WHERE id = 1"))
             ).scalar_one()
-            antispam_enabled = (
+            antispam_enabled, force_subscription_enabled = (
                 await session.execute(
-                    text("SELECT antispam_enabled FROM bot_settings WHERE id = 1")
+                    text(
+                        "SELECT antispam_enabled, force_subscription_enabled "
+                        "FROM bot_settings WHERE id = 1"
+                    )
                 )
-            ).scalar_one()
+            ).one()
 
         assert {
             "users",
@@ -86,10 +85,12 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
             "broadcast_records",
             "antispam_events",
             "bot_settings",
+            "force_subscription_targets",
             "alembic_version",
         }.issubset(tables)
-        assert revision == "0003_add_antispam_enabled"
+        assert revision == "0004_add_force_subscription"
         assert settings_count == 1
         assert antispam_enabled == 1
+        assert force_subscription_enabled == 0
     finally:
         await engine.dispose()
