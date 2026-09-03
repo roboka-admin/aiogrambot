@@ -25,14 +25,6 @@ async def force_subscription_menu_handler(
     )
 
 
-@router.callback_query(F.data == "admin_force_subscription_manage")
-async def manage_force_subscription_handler(
-    callback: CallbackQuery,
-    force_subscription_service: ForceSubscriptionService,
-) -> None:
-    await _show_management(callback, force_subscription_service)
-
-
 @router.callback_query(F.data == "admin_force_subscription_add")
 async def add_force_subscription_handler(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminForceSubscriptionStates.waiting_for_chat)
