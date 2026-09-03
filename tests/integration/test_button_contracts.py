@@ -65,6 +65,16 @@ def _literal_values(
     return []
 
 
+def _literal_fstring_prefix(node: ast.AST) -> str | None:
+    """Return the literal prefix of an f-string such as ``f"action:{id}"``."""
+    if not isinstance(node, ast.JoinedStr) or not node.values:
+        return None
+    first = node.values[0]
+    if isinstance(first, ast.Constant) and isinstance(first.value, str):
+        return first.value
+    return None
+
+
 def _name(node: ast.AST) -> str | None:
     if isinstance(node, ast.Name):
         return node.id
@@ -98,6 +108,10 @@ def _callback_contract(
 ) -> list[ButtonContract]:
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return [ButtonContract("callback_raw", node.value, location=location)]
+
+    fstring_prefix = _literal_fstring_prefix(node)
+    if fstring_prefix is not None:
+        return [ButtonContract("callback_raw_prefix", fstring_prefix, location=location)]
 
     call = node
     if (
@@ -372,8 +386,23 @@ def _handler_contracts() -> list[HandlerContract]:
                             value = _literal(child.comparators[0])
                             if isinstance(value, str):
                                 result.append(
+                                    HandlerContract("callback_raw", value, (), location)
+                                )
+                        elif (
+                            isinstance(child, ast.Call)
+                            and isinstance(child.func, ast.Attribute)
+                            and child.func.attr == "startswith"
+                            and isinstance(child.func.value, ast.Attribute)
+                            and isinstance(child.func.value.value, ast.Name)
+                            and child.func.value.value.id == "F"
+                            and child.func.value.attr == "data"
+                            and child.args
+                        ):
+                            value = _literal(child.args[0])
+                            if isinstance(value, str):
+                                result.append(
                                     HandlerContract(
-                                        "callback_raw", value, (), location
+                                        "callback_raw_prefix", value, (), location
                                     )
                                 )
                 else:
@@ -390,14 +419,16 @@ def _handler_contracts() -> list[HandlerContract]:
                             value = _literal(child.comparators[0])
                             if isinstance(value, str):
                                 result.append(
-                                    HandlerContract(
-                                        "message", value, (), location
-                                    )
+                                    HandlerContract("message", value, (), location)
                                 )
     return result
 
 
 def _matches(button: ButtonContract, handler: HandlerContract) -> bool:
+    if button.kind == "callback_raw_prefix" and handler.kind == "callback_raw_prefix":
+        return button.key == handler.key
+    if button.kind == "callback_raw" and handler.kind == "callback_raw_prefix":
+        return button.key.startswith(handler.key)
     if button.kind != handler.kind or button.key != handler.key:
         return False
     button_constraints = dict(button.constraints)
@@ -430,7 +461,7 @@ def test_no_duplicate_conflicting_callback_handlers():
     handlers = [
         handler
         for handler in _handler_contracts()
-        if handler.kind in {"callback_data", "callback_raw"}
+        if handler.kind in {"callback_data", "callback_raw", "callback_raw_prefix"}
     ]
     seen: dict[tuple[str, str, tuple[tuple[str, object], ...]], str] = {}
     duplicates: list[str] = []
@@ -469,8 +500,4 @@ def test_every_handler_router_is_included_in_main():
         for path in _source_files("handlers")
         if path.name != "__init__.py"
     }
-    missing = sorted(handler_modules - _included_handler_modules())
-    assert not missing, (
-        "Handler routers not included in main.py:\n- "
-        + "\n- ".join(missing)
-    )
+    assert handler_modules <= _included_handler_modules()
