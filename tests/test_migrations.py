@@ -58,14 +58,11 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
         output = result.stdout + result.stderr
         assert "Running upgrade  -> 0001_initial_schema" in output
         assert "0001_initial_schema -> 0002_add_bot_settings" in output
+        assert "0002_add_bot_settings -> 0003_add_antispam_enabled" in output
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
             tables = set(
-                (
-                    await session.execute(
-                        text("SHOW TABLES")
-                    )
-                ).scalars()
+                (await session.execute(text("SHOW TABLES"))).scalars()
             )
             revision = (
                 await session.execute(
@@ -77,6 +74,11 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
                     text("SELECT COUNT(*) FROM bot_settings WHERE id = 1")
                 )
             ).scalar_one()
+            antispam_enabled = (
+                await session.execute(
+                    text("SELECT antispam_enabled FROM bot_settings WHERE id = 1")
+                )
+            ).scalar_one()
 
         assert {
             "users",
@@ -86,7 +88,8 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
             "bot_settings",
             "alembic_version",
         }.issubset(tables)
-        assert revision == "0002_add_bot_settings"
+        assert revision == "0003_add_antispam_enabled"
         assert settings_count == 1
+        assert antispam_enabled == 1
     finally:
         await engine.dispose()
