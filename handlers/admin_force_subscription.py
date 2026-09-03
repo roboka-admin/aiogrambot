@@ -6,7 +6,11 @@ from filters.admin import AdminFilter
 from models.force_subscription import ForceSubscriptionTarget, ForceSubscriptionTargetType
 from services.force_subscription import ForceSubscriptionService
 from states.admin import AdminForceSubscriptionStates
-from keyboards.admin_force_subscription import admin_force_subscription_keyboard, admin_force_subscription_list_keyboard
+from keyboards.admin_force_subscription import (
+    admin_force_subscription_add_keyboard,
+    admin_force_subscription_keyboard,
+    admin_force_subscription_list_keyboard,
+)
 
 router = Router()
 router.message.filter(AdminFilter())
@@ -34,8 +38,20 @@ async def add_force_subscription_handler(callback: CallbackQuery, state: FSMCont
             "➕ افزودن کانال یا گروه\n\n"
             "آیدی یا نام کاربری عمومی کانال/گروه را ارسال کنید.\n"
             "مثال: @my_channel یا -1001234567890\n\n"
-            "⚠️ ربات باید داخل کانال/گروه حضور داشته باشد."
+            "⚠️ ربات باید داخل کانال/گروه حضور داشته باشد.",
+            reply_markup=admin_force_subscription_add_keyboard(),
         )
+
+
+@router.callback_query(F.data == "admin_force_subscription_cancel_add")
+async def cancel_force_subscription_add_handler(
+    callback: CallbackQuery,
+    state: FSMContext,
+    force_subscription_service: ForceSubscriptionService,
+) -> None:
+    await state.clear()
+    await callback.answer("افزودن لغو شد.")
+    await _show_management(callback, force_subscription_service)
 
 
 @router.message(AdminForceSubscriptionStates.waiting_for_chat)
@@ -46,14 +62,20 @@ async def receive_force_subscription_chat(
 ) -> None:
     value = (message.text or "").strip()
     if not value:
-        await message.answer("❌ لطفاً آیدی یا نام کاربری معتبر ارسال کنید.")
+        await message.answer(
+            "❌ لطفاً آیدی یا نام کاربری معتبر ارسال کنید.",
+            reply_markup=admin_force_subscription_add_keyboard(),
+        )
         return
 
     try:
         target = await force_subscription_service.resolve_target(value)
         await force_subscription_service.add_target(target)
     except ValueError as exc:
-        await message.answer(f"❌ {exc}")
+        await message.answer(
+            f"❌ {exc}",
+            reply_markup=admin_force_subscription_add_keyboard(),
+        )
         return
 
     await state.clear()
