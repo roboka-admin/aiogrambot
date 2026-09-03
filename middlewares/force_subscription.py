@@ -25,12 +25,8 @@ class ForceSubscriptionMiddleware(BaseMiddleware):
         if telegram_user is None or telegram_user.id in ADMIN_IDS:
             return await handler(event, data)
 
-        # The retry button must reach its dedicated handler so it can perform
-        # a fresh membership check and give the user useful feedback.
-        if (
-            event.callback_query is not None
-            and event.callback_query.data == CHECK_CALLBACK
-        ):
+        callback_query = getattr(event, "callback_query", None)
+        if callback_query is not None and callback_query.data == CHECK_CALLBACK:
             return await handler(event, data)
 
         settings_service: BotSettingsService = data["bot_settings_service"]
@@ -58,11 +54,13 @@ class ForceSubscriptionMiddleware(BaseMiddleware):
             "بعد از عضویت، روی «🔄 بررسی عضویت» بزنید."
         )
         keyboard = force_subscription_keyboard(list(targets))
-        if event.message is not None:
-            await event.message.answer(text, reply_markup=keyboard)
+        message = getattr(event, "message", None)
+        if message is not None:
+            await message.answer(text, reply_markup=keyboard)
             return
-        if event.callback_query is not None:
-            await event.callback_query.answer(
+        callback_query = getattr(event, "callback_query", None)
+        if callback_query is not None:
+            await callback_query.answer(
                 "❌ هنوز عضویت شما تأیید نشده است.",
                 show_alert=True,
             )
