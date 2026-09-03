@@ -109,21 +109,39 @@ class ForceSubscriptionService:
         target.updated_at = tehran_now()
         return await self._repository.update(target)
 
-    async def check_target_membership(self, *, user_telegram_id: int, target: ForceSubscriptionTarget) -> TargetMembershipResult:
+    async def check_target_membership(
+        self,
+        *,
+        user_telegram_id: int,
+        target: ForceSubscriptionTarget,
+    ) -> TargetMembershipResult:
         try:
-            member = await self._bot.get_chat_member(chat_id=target.chat_id, user_id=user_telegram_id)
+            member = await self._bot.get_chat_member(
+                chat_id=target.chat_id,
+                user_id=user_telegram_id,
+            )
         except (TelegramBadRequest, TelegramForbiddenError):
             return TargetMembershipResult(target, MembershipStatus.ERROR)
 
-        status = MembershipStatus(member.status) if member.status in MembershipStatus._value2member_map_ else MembershipStatus.UNKNOWN
+        status = (
+            MembershipStatus(member.status)
+            if member.status in MembershipStatus._value2member_map_
+            else MembershipStatus.UNKNOWN
+        )
         return TargetMembershipResult(target, status)
 
     async def check_membership(self, *, user_telegram_id: int) -> MembershipCheckResult:
         targets = await self.get_active_targets()
         if not targets:
             return MembershipCheckResult(True, ())
+
+        # This must be a normal async loop: awaiting inside a generator expression
+        # produces an async generator, which cannot be consumed by tuple().
         results = tuple(
-            await self.check_target_membership(user_telegram_id=user_telegram_id, target=target)
+            await self.check_target_membership(
+                user_telegram_id=user_telegram_id,
+                target=target,
+            )
             for target in targets
         )
         return MembershipCheckResult(
