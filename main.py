@@ -18,6 +18,7 @@ from handlers.register import router as register_router
 from handlers.start import router as start_router
 from handlers.support import router as support_router
 from middlewares.anti_spam import AntiSpamMiddleware
+from middlewares.force_subscription import ForceSubscriptionMiddleware
 from middlewares.logging import LoggingMiddleware
 from middlewares.maintenance import MaintenanceMiddleware
 from middlewares.services import ServicesMiddleware
@@ -45,6 +46,7 @@ async def main() -> None:
     )
     dp.update.middleware(MaintenanceMiddleware())
     dp.update.middleware(UserMiddleware())
+    dp.update.middleware(ForceSubscriptionMiddleware())
 
     dp.message.outer_middleware(AntiSpamMiddleware())
     dp.callback_query.outer_middleware(AntiSpamMiddleware())
