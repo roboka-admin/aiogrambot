@@ -14,6 +14,7 @@ class BotSettingsRecord(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False, default=1)
     bot_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     maintenance_mode: Mapped[bool] = mapped_column(Boolean, default=False)
+    antispam_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     offline_message: Mapped[str] = mapped_column(String(1000), default=DEFAULT_OFFLINE_MESSAGE)
     maintenance_message: Mapped[str] = mapped_column(String(1000), default=DEFAULT_MAINTENANCE_MESSAGE)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=tehran_now, onupdate=tehran_now)
