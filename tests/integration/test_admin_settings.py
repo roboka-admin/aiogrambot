@@ -26,6 +26,7 @@ async def test_settings_update_edits_when_message_is_stale() -> None:
         "⚙️ تنظیمات ربات\n\n"
         "وضعیت اصلی: 🔴 خاموش\n"
         "حالت تعمیرات: ⚪ غیرفعال\n"
+        "ضد اسپم: 🟢 فعال\n"
         "وضعیت مؤثر: 🔴 غیرفعال برای کاربران\n\n"
         "مدیران حتی در حالت خاموش یا تعمیرات به ربات دسترسی دارند.",
         reply_markup=admin_settings_keyboard(new_settings),
@@ -33,13 +34,25 @@ async def test_settings_update_edits_when_message_is_stale() -> None:
     callback.answer.assert_awaited_once_with("وضعیت ربات تغییر کرد.")
 
 
-def test_settings_keyboard_has_expected_single_row_layout() -> None:
+def test_settings_keyboard_has_two_row_layout() -> None:
     keyboard = admin_settings_keyboard(BotSettings())
 
-    assert len(keyboard.inline_keyboard) == 1
+    assert len(keyboard.inline_keyboard) == 2
     assert len(keyboard.inline_keyboard[0]) == 2
+    assert len(keyboard.inline_keyboard[1]) == 1
 
     assert [button.callback_data for button in keyboard.inline_keyboard[0]] == [
         "admin_settings_toggle_bot",
         "admin_settings_toggle_maintenance",
     ]
+    assert [button.callback_data for button in keyboard.inline_keyboard[1]] == [
+        "admin_settings_toggle_antispam",
+    ]
+
+
+def test_settings_keyboard_antispam_label_reflects_state() -> None:
+    enabled = admin_settings_keyboard(BotSettings(antispam_enabled=True))
+    disabled = admin_settings_keyboard(BotSettings(antispam_enabled=False))
+
+    assert enabled.inline_keyboard[1][0].text == "🟢 ضد اسپم فعال"
+    assert disabled.inline_keyboard[1][0].text == "🔴 ضد اسپم خاموش"
