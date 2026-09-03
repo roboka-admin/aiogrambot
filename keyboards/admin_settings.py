@@ -10,6 +10,7 @@ def admin_settings_keyboard(settings: BotSettings) -> InlineKeyboardMarkup:
         if settings.maintenance_mode
         else "⚪ حالت تعمیرات غیرفعال"
     )
+    antispam_label = "🟢 ضد اسپم فعال" if settings.antispam_enabled else "🔴 ضد اسپم خاموش"
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -21,6 +22,12 @@ def admin_settings_keyboard(settings: BotSettings) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=maintenance_label,
                     callback_data="admin_settings_toggle_maintenance",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=antispam_label,
+                    callback_data="admin_settings_toggle_antispam",
                 ),
             ],
         ]
