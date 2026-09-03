@@ -135,16 +135,17 @@ class ForceSubscriptionService:
         if not targets:
             return MembershipCheckResult(True, ())
 
-        # This must be a normal async loop: awaiting inside a generator expression
-        # produces an async generator, which cannot be consumed by tuple().
-        results = tuple(
-            await self.check_target_membership(
-                user_telegram_id=user_telegram_id,
-                target=target,
+        results: list[TargetMembershipResult] = []
+        for target in targets:
+            results.append(
+                await self.check_target_membership(
+                    user_telegram_id=user_telegram_id,
+                    target=target,
+                )
             )
-            for target in targets
-        )
+
+        results_tuple = tuple(results)
         return MembershipCheckResult(
-            is_allowed=all(result.is_satisfied for result in results),
-            targets=results,
+            is_allowed=all(result.is_satisfied for result in results_tuple),
+            targets=results_tuple,
         )
