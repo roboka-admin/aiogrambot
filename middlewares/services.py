@@ -9,11 +9,13 @@ from core.database import Database
 from repositories.antispam import AntiSpamRepository
 from repositories.bot_settings import BotSettingsRepository
 from repositories.broadcast import BroadcastRepository
+from repositories.force_subscription import ForceSubscriptionRepository
 from repositories.support import SupportRepository
 from repositories.user import UserRepository
 from services.antispam import AntiSpamService
 from services.bot_settings import BotSettingsService
 from services.broadcast import BroadcastService
+from services.force_subscription import ForceSubscriptionService
 from services.notification import NotificationService
 from services.register import RegisterService
 from services.support import SupportService
@@ -29,51 +31,28 @@ class ServicesMiddleware(BaseMiddleware):
         self._system_service = system_service
         self._broadcast_lock = asyncio.Lock()
 
-    async def __call__(
-        self,
-        handler: Callable[
-            [TelegramObject, dict[str, Any]],
-            Awaitable[Any],
-        ],
-        event: TelegramObject,
-        data: dict[str, Any],
-    ) -> Any:
+    async def __call__(self, handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]], event: TelegramObject, data: dict[str, Any]) -> Any:
         async with self._database.get_session() as session:
             async with session.begin():
                 user_repository = UserRepository(session)
                 support_repository = SupportRepository(session)
                 antispam_repository = AntiSpamRepository(session)
                 bot_settings_repository = BotSettingsRepository(session)
+                force_subscription_repository = ForceSubscriptionRepository(session)
 
                 @asynccontextmanager
                 async def broadcast_repository_scope():
                     async with self._database.get_session() as broadcast_session:
                         async with broadcast_session.begin():
-                            yield (
-                                UserRepository(broadcast_session),
-                                BroadcastRepository(broadcast_session),
-                            )
+                            yield (UserRepository(broadcast_session), BroadcastRepository(broadcast_session))
 
-                register_service = RegisterService(
-                    user_repository=user_repository,
-                )
-                user_service = UserService(
-                    user_repository=user_repository,
-                )
-                support_service = SupportService(
-                    support_repository=support_repository,
-                )
-                bot_settings_service = BotSettingsService(
-                    bot_settings_repository=bot_settings_repository,
-                )
-                broadcast_service = BroadcastService(
-                    bot=data["bot"],
-                    repository_factory=broadcast_repository_scope,
-                    broadcast_lock=self._broadcast_lock,
-                )
-                antispam_service = AntiSpamService(
-                    antispam_repository=antispam_repository,
-                )
+                register_service = RegisterService(user_repository=user_repository)
+                user_service = UserService(user_repository=user_repository)
+                support_service = SupportService(support_repository=support_repository)
+                bot_settings_service = BotSettingsService(bot_settings_repository=bot_settings_repository)
+                broadcast_service = BroadcastService(bot=data["bot"], repository_factory=broadcast_repository_scope, broadcast_lock=self._broadcast_lock)
+                antispam_service = AntiSpamService(antispam_repository=antispam_repository)
+                force_subscription_service = ForceSubscriptionService(bot=data["bot"], repository=force_subscription_repository)
                 notification_service = NotificationService(bot=data["bot"])
 
                 data["register_service"] = register_service
@@ -82,6 +61,7 @@ class ServicesMiddleware(BaseMiddleware):
                 data["bot_settings_service"] = bot_settings_service
                 data["broadcast_service"] = broadcast_service
                 data["antispam_service"] = antispam_service
+                data["force_subscription_service"] = force_subscription_service
                 data["notification_service"] = notification_service
                 data["system_service"] = self._system_service
 
