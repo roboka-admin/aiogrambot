@@ -12,6 +12,14 @@ def admin_force_subscription_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def admin_force_subscription_add_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="❌ لغو", callback_data="admin_force_subscription_cancel_add")],
+        ]
+    )
+
+
 def admin_force_subscription_list_keyboard(
     targets: list[ForceSubscriptionTarget],
 ) -> InlineKeyboardMarkup:
