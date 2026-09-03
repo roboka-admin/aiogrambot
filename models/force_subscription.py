@@ -1,11 +1,11 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import StrEnum
+from enum import Enum
 
 from core.timezone import tehran_now
 
 
-class ForceSubscriptionTargetType(StrEnum):
+class ForceSubscriptionTargetType(str, Enum):
     CHANNEL = "channel"
     SUPERGROUP = "supergroup"
 
