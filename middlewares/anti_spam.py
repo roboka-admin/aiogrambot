@@ -11,6 +11,7 @@ from aiogram.types import CallbackQuery, Message
 
 from config import ADMIN_IDS
 from services.antispam import AntiSpamService
+from services.bot_settings import BotSettingsService
 from services.user import UserService
 
 logger = logging.getLogger(__name__)
@@ -155,6 +156,11 @@ class AntiSpamMiddleware(BaseMiddleware):
     ) -> Any:
         user_id = event.from_user.id
         if user_id in ADMIN_IDS:
+            return await handler(event, data)
+
+        bot_settings_service: BotSettingsService = data["bot_settings_service"]
+        settings = await bot_settings_service.get_settings()
+        if not settings.antispam_enabled:
             return await handler(event, data)
 
         antispam_service: AntiSpamService | None = data.get("antispam_service")
