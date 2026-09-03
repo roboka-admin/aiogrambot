@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from aiogram.types import Update
 
+from keyboards.force_subscription import CHECK_CALLBACK
 from middlewares.force_subscription import ForceSubscriptionMiddleware
 from models.bot_settings import BotSettings
 from services.force_subscription import MembershipCheckResult
@@ -45,6 +46,20 @@ async def test_admin_bypasses_force_subscription() -> None:
 
 
 @pytest.mark.asyncio
+async def test_membership_check_callback_reaches_dedicated_handler() -> None:
+    middleware = ForceSubscriptionMiddleware()
+    handler = AsyncMock(return_value="handled")
+    event = MagicMock(spec=Update)
+    event.callback_query = MagicMock(data=CHECK_CALLBACK)
+    data = {"event_from_user": MagicMock(id=10)}
+
+    result = await middleware(handler, event, data)
+
+    assert result == "handled"
+    handler.assert_awaited_once_with(event, data)
+
+
+@pytest.mark.asyncio
 async def test_satisfied_user_reaches_handler() -> None:
     middleware = ForceSubscriptionMiddleware()
     handler = AsyncMock(return_value="handled")
@@ -71,7 +86,7 @@ async def test_satisfied_user_reaches_handler() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unsatisfied_user_is_blocked() -> None:
+async def test_unsatisfied_user_is_blocked_with_subscription_keyboard() -> None:
     middleware = ForceSubscriptionMiddleware()
     handler = AsyncMock(return_value="handled")
     event = MagicMock(spec=Update)
@@ -98,3 +113,5 @@ async def test_unsatisfied_user_is_blocked() -> None:
     handler.assert_not_awaited()
     assert data["force_subscription_result"] is check_result
     event.message.answer.assert_awaited_once()
+    _, kwargs = event.message.answer.await_args
+    assert kwargs["reply_markup"].inline_keyboard[-1][0].callback_data == CHECK_CALLBACK
