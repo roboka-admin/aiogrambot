@@ -13,6 +13,18 @@ router.message.filter(AdminFilter())
 router.callback_query.filter(AdminFilter())
 
 
+@router.message(F.text == "📢 عضویت اجباری")
+async def force_subscription_menu_handler(
+    message: Message,
+    force_subscription_service: ForceSubscriptionService,
+) -> None:
+    targets = await force_subscription_service.list_all_targets()
+    await message.answer(
+        _management_text(targets),
+        reply_markup=admin_force_subscription_list_keyboard(targets),
+    )
+
+
 @router.callback_query(F.data == "admin_force_subscription_manage")
 async def manage_force_subscription_handler(
     callback: CallbackQuery,
