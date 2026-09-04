@@ -3,6 +3,7 @@ from aiogram.types import CallbackQuery
 
 from callbacks.admin import (
     AdminForceSubscriptionStatsTargetCallback,
+    AdminForceSubscriptionStatsTargetRefreshCallback,
     AdminStatsCallback,
     AdminStatsRefreshCallback,
 )
@@ -49,33 +50,26 @@ async def force_subscription_target_stats_handler(
     callback_data: AdminForceSubscriptionStatsTargetCallback,
     force_subscription_service: ForceSubscriptionService,
 ) -> None:
-    target = await force_subscription_service.get_target(callback_data.chat_id)
-    if target is None:
-        await callback.answer("مقصد پیدا نشد.", show_alert=True)
-        return
-
-    stats = await force_subscription_service.get_target_membership_statistics(
-        callback_data.chat_id
-    )
-    target_type = "کانال" if target.target_type.value == "channel" else "گروه"
-    username = f"@{target.username}" if target.username else "—"
-
-    text = (
-        f"📌 آمار {target_type}\n\n"
-        f"📍 مقصد: {target.title}\n"
-        f"🔗 نام کاربری: {username}\n"
-        f"🆔 شناسه: {target.chat_id}\n\n"
-        "📊 عضویت‌های موفق\n\n"
-        f"👥 کل: {stats['total']:,}\n"
-        f"📝 امروز: {stats['today']:,}\n"
-        f"📝 ۷ روز اخیر: {stats['last_7_days']:,}\n"
-        f"📝 ۳۰ روز اخیر: {stats['last_30_days']:,}"
-    )
-    await callback.message.edit_text(
-        text,
-        reply_markup=force_subscription_target_stats_keyboard(),
+    await _show_target_statistics(
+        message=callback.message,
+        chat_id=callback_data.chat_id,
+        force_subscription_service=force_subscription_service,
     )
     await callback.answer()
+
+
+@router.callback_query(AdminForceSubscriptionStatsTargetRefreshCallback.filter())
+async def force_subscription_target_stats_refresh_handler(
+    callback: CallbackQuery,
+    callback_data: AdminForceSubscriptionStatsTargetRefreshCallback,
+    force_subscription_service: ForceSubscriptionService,
+) -> None:
+    await _show_target_statistics(
+        message=callback.message,
+        chat_id=callback_data.chat_id,
+        force_subscription_service=force_subscription_service,
+    )
+    await callback.answer("بروزرسانی شد.")
 
 
 async def _show_force_subscription_statistics(
@@ -99,4 +93,39 @@ async def _show_force_subscription_statistics(
     await message.edit_text(
         text,
         reply_markup=force_subscription_stats_keyboard(targets),
+    )
+
+
+async def _show_target_statistics(
+    *,
+    message,
+    chat_id: int,
+    force_subscription_service: ForceSubscriptionService,
+) -> None:
+    target = await force_subscription_service.get_target(chat_id)
+    if target is None:
+        await message.edit_text(
+            "❌ این مقصد دیگر در تنظیمات عضویت اجباری وجود ندارد.",
+            reply_markup=force_subscription_stats_keyboard([]),
+        )
+        return
+
+    stats = await force_subscription_service.get_target_membership_statistics(chat_id)
+    target_type = "کانال" if target.target_type.value == "channel" else "گروه"
+    username = f"@{target.username}" if target.username else "—"
+
+    text = (
+        f"📌 آمار {target_type}\n\n"
+        f"📍 مقصد: {target.title}\n"
+        f"🔗 نام کاربری: {username}\n"
+        f"🆔 شناسه: {target.chat_id}\n\n"
+        "📊 عضویت‌های موفق\n\n"
+        f"👥 کل: {stats['total']:,}\n"
+        f"📝 امروز: {stats['today']:,}\n"
+        f"📝 ۷ روز اخیر: {stats['last_7_days']:,}\n"
+        f"📝 ۳۰ روز اخیر: {stats['last_30_days']:,}"
+    )
+    await message.edit_text(
+        text,
+        reply_markup=force_subscription_target_stats_keyboard(chat_id),
     )
