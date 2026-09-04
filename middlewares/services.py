@@ -9,8 +9,8 @@ from core.database import Database
 from repositories.antispam import AntiSpamRepository
 from repositories.bot_settings import BotSettingsRepository
 from repositories.broadcast import BroadcastRepository
-from repositories.force_subscription import ForceSubscriptionEventRepository
 from repositories.force_subscription import ForceSubscriptionRepository
+from repositories.force_subscription_event import ForceSubscriptionEventRepository
 from repositories.support import SupportRepository
 from repositories.user import UserRepository
 from services.antispam import AntiSpamService
