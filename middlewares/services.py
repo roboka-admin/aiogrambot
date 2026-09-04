@@ -9,6 +9,7 @@ from core.database import Database
 from repositories.antispam import AntiSpamRepository
 from repositories.bot_settings import BotSettingsRepository
 from repositories.broadcast import BroadcastRepository
+from repositories.force_subscription import ForceSubscriptionEventRepository
 from repositories.force_subscription import ForceSubscriptionRepository
 from repositories.support import SupportRepository
 from repositories.user import UserRepository
@@ -39,6 +40,7 @@ class ServicesMiddleware(BaseMiddleware):
                 antispam_repository = AntiSpamRepository(session)
                 bot_settings_repository = BotSettingsRepository(session)
                 force_subscription_repository = ForceSubscriptionRepository(session)
+                force_subscription_event_repository = ForceSubscriptionEventRepository(session)
 
                 @asynccontextmanager
                 async def broadcast_repository_scope():
@@ -52,7 +54,11 @@ class ServicesMiddleware(BaseMiddleware):
                 bot_settings_service = BotSettingsService(bot_settings_repository=bot_settings_repository)
                 broadcast_service = BroadcastService(bot=data["bot"], repository_factory=broadcast_repository_scope, broadcast_lock=self._broadcast_lock)
                 antispam_service = AntiSpamService(antispam_repository=antispam_repository)
-                force_subscription_service = ForceSubscriptionService(bot=data["bot"], repository=force_subscription_repository)
+                force_subscription_service = ForceSubscriptionService(
+                    bot=data["bot"],
+                    repository=force_subscription_repository,
+                    event_repository=force_subscription_event_repository,
+                )
                 notification_service = NotificationService(bot=data["bot"])
 
                 data["register_service"] = register_service
