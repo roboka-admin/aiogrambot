@@ -10,8 +10,8 @@ from models.base import Base
 from models.antispam_db import AntiSpamEventRecord
 from models.bot_settings_db import BotSettingsRecord
 from models.broadcast_db import BroadcastRecordRecord
+from models.force_subscription_db import ForceSubscriptionMembershipEventRecord
 from models.force_subscription_db import ForceSubscriptionTargetRecord
-from models.force_subscription_event_db import ForceSubscriptionMembershipEventRecord
 from models.support_db import SupportTicketRecord
 from models.user_db import UserRecord
 
