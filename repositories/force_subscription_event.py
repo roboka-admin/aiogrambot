@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.force_subscription_event import ForceSubscriptionMembershipEvent
-from models.force_subscription_event_db import ForceSubscriptionMembershipEventRecord
+from models.force_subscription_db import ForceSubscriptionMembershipEventRecord
 from repositories.interfaces.force_subscription_event import IForceSubscriptionEventRepository
 
 
