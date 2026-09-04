@@ -10,6 +10,7 @@ from models.antispam_db import AntiSpamEventRecord
 from models.base import Base
 from models.bot_settings_db import BotSettingsRecord
 from models.broadcast_db import BroadcastRecordRecord
+from models.force_subscription_db import ForceSubscriptionMembershipEventRecord
 from models.force_subscription_db import ForceSubscriptionTargetRecord
 from models.support_db import SupportTicketRecord
 from models.user_db import UserRecord
@@ -21,6 +22,7 @@ _ = (
     AntiSpamEventRecord,
     BotSettingsRecord,
     ForceSubscriptionTargetRecord,
+    ForceSubscriptionMembershipEventRecord,
 )
 
 
@@ -36,7 +38,6 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
 
     engine = create_async_engine(database_url, pool_pre_ping=True)
     try:
-        # This test is intentionally destructive, but only against TEST_DATABASE_URL.
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.drop_all)
             await connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
@@ -61,6 +62,7 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
         assert "0001_initial_schema -> 0002_add_bot_settings" in output
         assert "0002_add_bot_settings -> 0003_add_antispam_enabled" in output
         assert "0003_add_antispam_enabled -> 0004_add_force_subscription" in output
+        assert "0004_add_force_subscription -> 0005_add_force_subscription_membership_events" in output
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
             tables = set((await session.execute(text("SHOW TABLES"))).scalars())
@@ -86,9 +88,10 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
             "antispam_events",
             "bot_settings",
             "force_subscription_targets",
+            "force_subscription_membership_events",
             "alembic_version",
         }.issubset(tables)
-        assert revision == "0004_add_force_subscription"
+        assert revision == "0005_add_force_subscription_membership_events"
         assert settings_count == 1
         assert antispam_enabled == 1
         assert force_subscription_enabled == 0
