@@ -55,3 +55,9 @@ class AdminForceSubscriptionStatsTargetCallback(
     CallbackData, prefix="admin_force_subscription_stats_target"
 ):
     chat_id: int
+
+
+class AdminForceSubscriptionStatsTargetRefreshCallback(
+    CallbackData, prefix="admin_force_subscription_stats_target_refresh"
+):
+    chat_id: int
