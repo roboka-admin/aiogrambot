@@ -2,6 +2,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from callbacks.admin import (
     AdminForceSubscriptionStatsTargetCallback,
+    AdminForceSubscriptionStatsTargetRefreshCallback,
     AdminStatsCallback,
     AdminStatsRefreshCallback,
 )
@@ -114,14 +115,16 @@ def force_subscription_stats_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def force_subscription_target_stats_keyboard() -> InlineKeyboardMarkup:
+def force_subscription_target_stats_keyboard(
+    target_chat_id: int,
+) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
                     text="🔄 بروزرسانی",
-                    callback_data=AdminStatsRefreshCallback(
-                        section="force_subscription"
+                    callback_data=AdminForceSubscriptionStatsTargetRefreshCallback(
+                        chat_id=target_chat_id
                     ).pack(),
                 ),
                 InlineKeyboardButton(
