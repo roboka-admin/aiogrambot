@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import timedelta
 from enum import Enum
 
 from aiogram import Bot
@@ -6,7 +7,9 @@ from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
 from core.timezone import tehran_now
 from models.force_subscription import ForceSubscriptionTarget, ForceSubscriptionTargetType
+from models.force_subscription_event import ForceSubscriptionMembershipEvent
 from repositories.interfaces.force_subscription import IForceSubscriptionRepository
+from repositories.interfaces.force_subscription_event import IForceSubscriptionEventRepository
 
 
 class MembershipStatus(str, Enum):
@@ -46,9 +49,16 @@ class MembershipCheckResult:
 
 
 class ForceSubscriptionService:
-    def __init__(self, *, bot: Bot, repository: IForceSubscriptionRepository) -> None:
+    def __init__(
+        self,
+        *,
+        bot: Bot,
+        repository: IForceSubscriptionRepository,
+        event_repository: IForceSubscriptionEventRepository | None = None,
+    ) -> None:
         self._bot = bot
         self._repository = repository
+        self._event_repository = event_repository
 
     async def get_active_targets(self) -> list[ForceSubscriptionTarget]:
         return await self._repository.list_active()
@@ -137,15 +147,52 @@ class ForceSubscriptionService:
 
         results: list[TargetMembershipResult] = []
         for target in targets:
-            results.append(
-                await self.check_target_membership(
-                    user_telegram_id=user_telegram_id,
-                    target=target,
-                )
+            result = await self.check_target_membership(
+                user_telegram_id=user_telegram_id,
+                target=target,
             )
+            results.append(result)
+            if result.is_satisfied and self._event_repository is not None:
+                await self._event_repository.create(
+                    ForceSubscriptionMembershipEvent(
+                        id=None,
+                        user_telegram_id=user_telegram_id,
+                        target_chat_id=target.chat_id,
+                    )
+                )
 
         results_tuple = tuple(results)
         return MembershipCheckResult(
             is_allowed=all(result.is_satisfied for result in results_tuple),
             targets=results_tuple,
         )
+
+    async def get_membership_statistics(self) -> dict[str, int]:
+        if self._event_repository is None:
+            return {"total": 0, "today": 0, "last_7_days": 0, "last_30_days": 0}
+
+        today = tehran_now().replace(hour=0, minute=0, second=0, microsecond=0)
+        return {
+            "total": await self._event_repository.count_total(),
+            "today": await self._event_repository.count_since(today),
+            "last_7_days": await self._event_repository.count_since(today - timedelta(days=7)),
+            "last_30_days": await self._event_repository.count_since(today - timedelta(days=30)),
+        }
+
+    async def get_target_membership_statistics(
+        self, target_chat_id: int
+    ) -> dict[str, int]:
+        if self._event_repository is None:
+            return {"total": 0, "today": 0, "last_7_days": 0, "last_30_days": 0}
+
+        today = tehran_now().replace(hour=0, minute=0, second=0, microsecond=0)
+        return {
+            "total": await self._event_repository.count_target_total(target_chat_id),
+            "today": await self._event_repository.count_target_since(target_chat_id, today),
+            "last_7_days": await self._event_repository.count_target_since(
+                target_chat_id, today - timedelta(days=7)
+            ),
+            "last_30_days": await self._event_repository.count_target_since(
+                target_chat_id, today - timedelta(days=30)
+            ),
+        }
