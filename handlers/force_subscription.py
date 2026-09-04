@@ -9,7 +9,7 @@ CHECK_CALLBACK = "force_subscription_check"
 router = Router()
 
 
-@router.callback_query(F.data == "force_subscription_check")
+@router.callback_query(F.data == CHECK_CALLBACK)
 async def check_force_subscription_handler(
     callback: CallbackQuery,
     force_subscription_service: ForceSubscriptionService,
@@ -23,6 +23,10 @@ async def check_force_subscription_handler(
     )
 
     if result.is_allowed:
+        await force_subscription_service.record_successful_membership_check(
+            user_telegram_id=callback.from_user.id,
+            result=result,
+        )
         await callback.answer("✅ عضویت شما تأیید شد. حالا می‌توانید از ربات استفاده کنید.")
         if callback.message is not None:
             await callback.message.delete()
