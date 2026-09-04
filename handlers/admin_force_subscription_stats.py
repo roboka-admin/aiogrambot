@@ -1,4 +1,5 @@
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery
 
 from callbacks.admin import (
@@ -72,6 +73,31 @@ async def force_subscription_target_stats_refresh_handler(
     await callback.answer("بروزرسانی شد.")
 
 
+async def _edit_message_if_changed(
+    *,
+    message,
+    text: str,
+    reply_markup,
+) -> None:
+    """Edit a stats message only when its content or keyboard actually changed.
+
+    Telegram rejects an edit when both are identical. The equality check avoids
+    the normal case, while the narrow exception guard handles a possible race
+    where another update changes the message between the check and the edit.
+    """
+    if message is None:
+        return
+
+    if message.text == text and message.reply_markup == reply_markup:
+        return
+
+    try:
+        await message.edit_text(text, reply_markup=reply_markup)
+    except TelegramBadRequest as exc:
+        if "message is not modified" not in str(exc).lower():
+            raise
+
+
 async def _show_force_subscription_statistics(
     *,
     message,
@@ -90,8 +116,9 @@ async def _show_force_subscription_statistics(
         f"🎯 تعداد مقصدها: {len(targets):,}\n"
         "برای مشاهده آمار هر مقصد، روی آن بزنید."
     )
-    await message.edit_text(
-        text,
+    await _edit_message_if_changed(
+        message=message,
+        text=text,
         reply_markup=force_subscription_stats_keyboard(targets),
     )
 
@@ -104,8 +131,9 @@ async def _show_target_statistics(
 ) -> None:
     target = await force_subscription_service.get_target(chat_id)
     if target is None:
-        await message.edit_text(
-            "❌ این مقصد دیگر در تنظیمات عضویت اجباری وجود ندارد.",
+        await _edit_message_if_changed(
+            message=message,
+            text="❌ این مقصد دیگر در تنظیمات عضویت اجباری وجود ندارد.",
             reply_markup=force_subscription_stats_keyboard([]),
         )
         return
@@ -125,7 +153,8 @@ async def _show_target_statistics(
         f"📝 ۷ روز اخیر: {stats['last_7_days']:,}\n"
         f"📝 ۳۰ روز اخیر: {stats['last_30_days']:,}"
     )
-    await message.edit_text(
-        text,
+    await _edit_message_if_changed(
+        message=message,
+        text=text,
         reply_markup=force_subscription_target_stats_keyboard(chat_id),
     )
