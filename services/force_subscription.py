@@ -147,25 +147,35 @@ class ForceSubscriptionService:
 
         results: list[TargetMembershipResult] = []
         for target in targets:
-            result = await self.check_target_membership(
-                user_telegram_id=user_telegram_id,
-                target=target,
-            )
-            results.append(result)
-            if result.is_satisfied and self._event_repository is not None:
-                await self._event_repository.create(
-                    ForceSubscriptionMembershipEvent(
-                        id=None,
-                        user_telegram_id=user_telegram_id,
-                        target_chat_id=target.chat_id,
-                    )
+            results.append(
+                await self.check_target_membership(
+                    user_telegram_id=user_telegram_id,
+                    target=target,
                 )
+            )
 
         results_tuple = tuple(results)
         return MembershipCheckResult(
             is_allowed=all(result.is_satisfied for result in results_tuple),
             targets=results_tuple,
         )
+
+    async def record_successful_membership_check(
+        self,
+        *,
+        user_telegram_id: int,
+        result: MembershipCheckResult,
+    ) -> None:
+        if self._event_repository is None or not result.is_allowed:
+            return
+        for item in result.targets:
+            await self._event_repository.create(
+                ForceSubscriptionMembershipEvent(
+                    id=None,
+                    user_telegram_id=user_telegram_id,
+                    target_chat_id=item.target.chat_id,
+                )
+            )
 
     async def get_membership_statistics(self) -> dict[str, int]:
         if self._event_repository is None:
