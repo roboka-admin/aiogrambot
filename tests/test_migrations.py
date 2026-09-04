@@ -75,7 +75,7 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
         assert "0001_initial_schema -> 0002_add_bot_settings" in output
         assert "0002_add_bot_settings -> 0003_add_antispam_enabled" in output
         assert "0003_add_antispam_enabled -> 0004_add_force_subscription" in output
-        assert "0004_add_force_subscription -> 0005_add_force_subscription_membership_events" in output
+        assert "0004_add_force_subscription -> 0005_membership_events" in output
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
             tables = set((await session.execute(text("SHOW TABLES"))).scalars())
@@ -104,7 +104,7 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
             "force_subscription_membership_events",
             "alembic_version",
         }.issubset(tables)
-        assert revision == "0005_add_force_subscription_membership_events"
+        assert revision == "0005_membership_events"
         assert settings_count == 1
         assert antispam_enabled == 1
         assert force_subscription_enabled == 0
