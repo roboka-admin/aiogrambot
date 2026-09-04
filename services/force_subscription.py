@@ -66,6 +66,9 @@ class ForceSubscriptionService:
     async def list_all_targets(self) -> list[ForceSubscriptionTarget]:
         return await self._repository.list_all()
 
+    async def get_target(self, chat_id: int) -> ForceSubscriptionTarget | None:
+        return await self._repository.get(chat_id)
+
     async def resolve_target(self, value: str) -> ForceSubscriptionTarget:
         query: int | str
         try:
