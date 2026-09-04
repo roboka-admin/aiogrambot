@@ -4,12 +4,10 @@ from aiogram.types import CallbackQuery
 from keyboards.force_subscription import force_subscription_keyboard
 from services.force_subscription import ForceSubscriptionService
 
-CHECK_CALLBACK = "force_subscription_check"
-
 router = Router()
 
 
-@router.callback_query(F.data == CHECK_CALLBACK)
+@router.callback_query(F.data == "force_subscription_check")
 async def check_force_subscription_handler(
     callback: CallbackQuery,
     force_subscription_service: ForceSubscriptionService,
