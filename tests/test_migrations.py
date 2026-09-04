@@ -26,6 +26,20 @@ _ = (
 )
 
 
+async def _reset_test_database(connection) -> None:
+    """Remove every user table so the migration chain always starts from zero."""
+    tables = set((await connection.execute(text("SHOW TABLES"))).scalars())
+    if not tables:
+        return
+
+    await connection.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+    try:
+        for table in tables:
+            await connection.execute(text(f"DROP TABLE IF EXISTS `{table}`"))
+    finally:
+        await connection.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+
+
 @pytest.mark.asyncio
 async def test_initial_migration_builds_test_database_from_empty_schema() -> None:
     """Verify the real Alembic migration chain can build the dedicated test DB from scratch."""
@@ -39,8 +53,7 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
     engine = create_async_engine(database_url, pool_pre_ping=True)
     try:
         async with engine.begin() as connection:
-            await connection.run_sync(Base.metadata.drop_all)
-            await connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
+            await _reset_test_database(connection)
 
         result = subprocess.run(
             [
