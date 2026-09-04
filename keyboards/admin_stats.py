@@ -1,6 +1,11 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from callbacks.admin import AdminStatsCallback, AdminStatsRefreshCallback
+from callbacks.admin import (
+    AdminForceSubscriptionStatsTargetCallback,
+    AdminStatsCallback,
+    AdminStatsRefreshCallback,
+)
+from models.force_subscription import ForceSubscriptionTarget
 
 
 def stats_dashboard_keyboard() -> InlineKeyboardMarkup:
@@ -25,6 +30,12 @@ def stats_dashboard_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="🛡️ آمار ضداسپم",
                     callback_data=AdminStatsCallback(section="antispam").pack(),
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📌 آمار عضویت اجباری",
+                    callback_data=AdminStatsCallback(section="force_subscription").pack(),
                 ),
             ],
             [
@@ -72,6 +83,54 @@ def antispam_stats_keyboard() -> InlineKeyboardMarkup:
 
 def system_stats_keyboard() -> InlineKeyboardMarkup:
     return _stats_page_keyboard("system")
+
+
+def force_subscription_stats_keyboard(
+    targets: list[ForceSubscriptionTarget],
+) -> InlineKeyboardMarkup:
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=("🟢 " if target.is_active else "⚪ ") + target.title,
+                callback_data=AdminForceSubscriptionStatsTargetCallback(
+                    chat_id=target.chat_id
+                ).pack(),
+            )
+        ]
+        for target in targets
+    ]
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="🔄 بروزرسانی",
+                callback_data=AdminStatsRefreshCallback(section="force_subscription").pack(),
+            ),
+            InlineKeyboardButton(
+                text="⬅️ آمار و وضعیت",
+                callback_data=AdminStatsCallback(section="dashboard").pack(),
+            ),
+        ]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def force_subscription_target_stats_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🔄 بروزرسانی",
+                    callback_data=AdminStatsRefreshCallback(
+                        section="force_subscription"
+                    ).pack(),
+                ),
+                InlineKeyboardButton(
+                    text="⬅️ آمار عضویت اجباری",
+                    callback_data=AdminStatsCallback(section="force_subscription").pack(),
+                ),
+            ]
+        ]
+    )
 
 
 def placeholder_stats_keyboard(section: str) -> InlineKeyboardMarkup:
