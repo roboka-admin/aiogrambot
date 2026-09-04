@@ -49,7 +49,7 @@ async def force_subscription_target_stats_handler(
     callback_data: AdminForceSubscriptionStatsTargetCallback,
     force_subscription_service: ForceSubscriptionService,
 ) -> None:
-    target = await force_subscription_service._repository.get(callback_data.chat_id)
+    target = await force_subscription_service.get_target(callback_data.chat_id)
     if target is None:
         await callback.answer("مقصد پیدا نشد.", show_alert=True)
         return
