@@ -1,4 +1,3 @@
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -17,7 +16,7 @@ def target(chat_id: int = -1001) -> ForceSubscriptionTarget:
 
 
 @pytest.mark.asyncio
-async def test_successful_membership_check_records_event() -> None:
+async def test_successful_membership_check_can_be_recorded() -> None:
     bot = MagicMock()
     bot.get_chat_member = AsyncMock(return_value=MagicMock(status="member"))
     repository = MagicMock()
@@ -32,6 +31,10 @@ async def test_successful_membership_check_records_event() -> None:
     )
 
     result = await service.check_membership(user_telegram_id=10)
+    await service.record_successful_membership_check(
+        user_telegram_id=10,
+        result=result,
+    )
 
     assert result.is_allowed is True
     event_repository.create.assert_awaited_once()
@@ -41,7 +44,7 @@ async def test_successful_membership_check_records_event() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unsatisfied_membership_does_not_record_event() -> None:
+async def test_unsatisfied_membership_is_not_recorded() -> None:
     bot = MagicMock()
     bot.get_chat_member = AsyncMock(return_value=MagicMock(status="left"))
     repository = MagicMock()
@@ -56,6 +59,10 @@ async def test_unsatisfied_membership_does_not_record_event() -> None:
     )
 
     result = await service.check_membership(user_telegram_id=10)
+    await service.record_successful_membership_check(
+        user_telegram_id=10,
+        result=result,
+    )
 
     assert result.is_allowed is False
     event_repository.create.assert_not_awaited()
