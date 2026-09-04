@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, String
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.timezone import tehran_now
@@ -19,4 +19,15 @@ class ForceSubscriptionTargetRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=tehran_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=tehran_now, onupdate=tehran_now
+    )
+
+
+class ForceSubscriptionMembershipEventRecord(Base):
+    __tablename__ = "force_subscription_membership_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    target_chat_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=tehran_now
     )
