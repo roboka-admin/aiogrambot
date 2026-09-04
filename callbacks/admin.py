@@ -49,3 +49,9 @@ class AdminStatsCallback(CallbackData, prefix="admin_stats"):
 
 class AdminStatsRefreshCallback(CallbackData, prefix="admin_stats_refresh"):
     section: str
+
+
+class AdminForceSubscriptionStatsTargetCallback(
+    CallbackData, prefix="admin_force_subscription_stats_target"
+):
+    chat_id: int
