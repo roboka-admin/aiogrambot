@@ -5,10 +5,20 @@ import pytest
 from handlers.force_subscription import check_force_subscription_handler
 from keyboards.force_subscription import CHECK_CALLBACK, force_subscription_keyboard
 from models.force_subscription import ForceSubscriptionTarget, ForceSubscriptionTargetType
-from services.force_subscription import MembershipCheckResult, TargetMembershipResult, MembershipStatus
+from services.force_subscription import (
+    MembershipCheckResult,
+    MembershipStatus,
+    TargetMembershipResult,
+)
 
 
-def make_target(chat_id: int, title: str, *, username: str | None = None, invite_link: str | None = None):
+def make_target(
+    chat_id: int,
+    title: str,
+    *,
+    username: str | None = None,
+    invite_link: str | None = None,
+):
     return ForceSubscriptionTarget(
         chat_id=chat_id,
         title=title,
@@ -52,10 +62,15 @@ async def test_check_handler_deletes_requirement_message_after_success() -> None
     service.check_membership = AsyncMock(
         return_value=MembershipCheckResult(is_allowed=True, targets=())
     )
+    service.record_successful_membership_check = AsyncMock()
 
     await check_force_subscription_handler(callback, service)
 
     service.check_membership.assert_awaited_once_with(user_telegram_id=10)
+    service.record_successful_membership_check.assert_awaited_once_with(
+        user_telegram_id=10,
+        result=MembershipCheckResult(is_allowed=True, targets=()),
+    )
     callback.message.delete.assert_awaited_once()
     callback.answer.assert_awaited_once_with(
         "✅ عضویت شما تأیید شد. حالا می‌توانید از ربات استفاده کنید."
@@ -68,6 +83,7 @@ async def test_check_handler_keeps_message_when_membership_is_missing() -> None:
     callback = MagicMock()
     callback.from_user = MagicMock(id=10)
     callback.message = MagicMock()
+    callback.message.delete = AsyncMock()
     callback.message.edit_reply_markup = AsyncMock()
     callback.answer = AsyncMock()
 
