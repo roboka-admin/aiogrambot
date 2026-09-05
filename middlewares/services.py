@@ -5,6 +5,7 @@ from typing import Any, Awaitable, Callable
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
+from config import ADMIN_IDS
 from core.admin_permissions import ADMIN_PERMISSION_REGISTRY
 from core.database import Database
 from repositories.admin import AdminRepository
@@ -45,12 +46,13 @@ class ServicesMiddleware(BaseMiddleware):
                 return
             async with self._database.get_session() as session:
                 async with session.begin():
-                    admin_service = AdminService(
-                        admin_repository=AdminRepository(session)
-                    )
+                    admin_repository = AdminRepository(session)
+                    admin_service = AdminService(admin_repository=admin_repository)
                     await admin_service.sync_permission_registry(
                         ADMIN_PERMISSION_REGISTRY
                     )
+                    for telegram_id in ADMIN_IDS:
+                        await admin_service.ensure_owner(telegram_id)
             # Only mark the registry ready after its transaction has committed.
             self._admin_registry_synced = True
 
