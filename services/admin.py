@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 
+from core.admin_permissions import ADMIN_PERMISSION_REGISTRY
 from models.admin import Admin, AdminPermission, AdminRole, AdminStatus
 from repositories.interfaces.admin import IAdminRepository
 
@@ -43,6 +44,15 @@ class AdminService:
         await self._admin_repository.sync_permissions(permissions)
 
     async def get_permissions(self, telegram_id: int) -> set[str]:
+        return await self._admin_repository.get_permissions(telegram_id)
+
+    async def get_effective_permissions(self, telegram_id: int) -> set[str]:
+        """Return the capabilities an active administrator can actually use."""
+        admin = await self._admin_repository.get(telegram_id)
+        if admin is None or admin.status is not AdminStatus.ACTIVE:
+            return set()
+        if admin.role is AdminRole.OWNER:
+            return {permission.key for permission in ADMIN_PERMISSION_REGISTRY}
         return await self._admin_repository.get_permissions(telegram_id)
 
     async def set_permissions(
