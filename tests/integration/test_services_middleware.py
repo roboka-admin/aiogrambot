@@ -84,10 +84,11 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     assert admin_repository.call_count == 2
     broadcast_repository.assert_not_called()
 
+    admin_service.assert_any_call(admin_repository.return_value)
+    assert admin_service.call_count == 2
     registry_service.sync_permission_registry.assert_awaited_once_with(
         ADMIN_PERMISSION_REGISTRY
     )
-    request_service.assert_not_called()
 
     register_service.assert_called_once_with(
         user_repository=user_repository.return_value,
@@ -115,10 +116,6 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
         event_repository=force_subscription_event_repository.return_value,
     )
     notification_service.assert_called_once_with(bot=bot)
-
-    # The second AdminService instance is request-scoped and is injected into handlers.
-    assert data["admin_service"] is admin_service.call_args_list[-1].args[0] if False else request_service
-    request_service.assert_not_called()
 
     assert data["register_service"] is register_service.return_value
     assert data["user_service"] is user_service.return_value
@@ -175,6 +172,7 @@ async def test_services_middleware_passes_handler_exception_through_transaction(
             await middleware(handler, MagicMock(), {"bot": bot})
 
     assert admin_repository.call_count == 2
+    assert admin_service.call_count == 2
     registry_service.sync_permission_registry.assert_awaited_once_with(
         ADMIN_PERMISSION_REGISTRY
     )
