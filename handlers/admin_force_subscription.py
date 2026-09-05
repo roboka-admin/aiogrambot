@@ -2,7 +2,7 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 
-from filters.admin import AdminFilter
+from filters.admin import AdminPermissionFilter
 from models.force_subscription import ForceSubscriptionTarget, ForceSubscriptionTargetType
 from services.force_subscription import ForceSubscriptionService
 from states.admin import AdminForceSubscriptionStates
@@ -13,8 +13,8 @@ from keyboards.admin_force_subscription import (
 )
 
 router = Router()
-router.message.filter(AdminFilter())
-router.callback_query.filter(AdminFilter())
+router.message.filter(AdminPermissionFilter("force_subscription"))
+router.callback_query.filter(AdminPermissionFilter("force_subscription"))
 
 
 @router.message(F.text == "📢 عضویت اجباری")
