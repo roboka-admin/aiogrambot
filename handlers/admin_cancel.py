@@ -40,3 +40,9 @@ async def admin_cancel_handler(
         await _show_user_management(message=callback.message, edit=True)
 
     await callback.answer("لغو شد.")
+
+
+@router.callback_query(F.data == "noop")
+async def noop_callback_handler(callback: CallbackQuery) -> None:
+    """Acknowledge non-action pagination indicators without changing the message."""
+    await callback.answer()
