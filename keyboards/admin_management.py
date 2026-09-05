@@ -7,6 +7,7 @@ from callbacks.admin import (
     AdminCreateConfirmCallback,
     AdminCreatePermissionCallback,
     AdminManagementCallback,
+    AdminPermissionCallback,
 )
 from models.admin import Admin, AdminPermission
 
@@ -137,6 +138,39 @@ def permission_selection_keyboard(
                 text="❌ لغو",
                 callback_data=AdminCreateCancelCallback().pack(),
             ),
+        ]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def managed_permission_keyboard(
+    telegram_id: int,
+    permissions: Sequence[AdminPermission],
+    selected: Collection[str],
+) -> InlineKeyboardMarkup:
+    selected = set(selected)
+    rows = []
+    for permission in permissions:
+        mark = "✅" if permission.key in selected else "⬜"
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"{mark} {permission.title}",
+                    callback_data=AdminPermissionCallback(
+                        telegram_id=telegram_id,
+                        permission_key=permission.key,
+                    ).pack(),
+                )
+            ]
+        )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="🔙 جزئیات ادمین",
+                callback_data=AdminManagementCallback(
+                    action="view", telegram_id=telegram_id
+                ).pack(),
+            )
         ]
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)
