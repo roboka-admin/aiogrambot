@@ -13,3 +13,8 @@ class AdminBroadcastStates(StatesGroup):
 
 class AdminForceSubscriptionStates(StatesGroup):
     waiting_for_chat = State()
+
+
+class AdminManagementStates(StatesGroup):
+    waiting_for_admin_id = State()
+    waiting_for_permission_selection = State()
