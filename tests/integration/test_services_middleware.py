@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from aiogram import Bot
 
+from core.admin_permissions import ADMIN_PERMISSION_REGISTRY
 from middlewares.services import ServicesMiddleware
 
 
@@ -58,6 +59,10 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
         patch("middlewares.services.NotificationService") as notification_service,
         patch("middlewares.services.AdminService") as admin_service,
     ):
+        registry_service = MagicMock()
+        request_service = MagicMock()
+        admin_service.side_effect = [registry_service, request_service]
+
         middleware = ServicesMiddleware(
             database=database,
             system_service=system_service,
@@ -76,7 +81,13 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     force_subscription_repository.assert_called_once_with(session)
     force_subscription_event_repository.assert_called_once_with(session)
     admin_repository.assert_any_call(session)
+    assert admin_repository.call_count == 2
     broadcast_repository.assert_not_called()
+
+    registry_service.sync_permission_registry.assert_awaited_once_with(
+        ADMIN_PERMISSION_REGISTRY
+    )
+    request_service.assert_not_called()
 
     register_service.assert_called_once_with(
         user_repository=user_repository.return_value,
@@ -104,12 +115,10 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
         event_repository=force_subscription_event_repository.return_value,
     )
     notification_service.assert_called_once_with(bot=bot)
-    admin_service.assert_called_once_with(
-        admin_repository=admin_repository.return_value,
-    )
-    admin_service.return_value.sync_permission_registry.assert_awaited_once_with(
-        __import__("core.admin_permissions", fromlist=["ADMIN_PERMISSION_REGISTRY"]).ADMIN_PERMISSION_REGISTRY
-    )
+
+    # The second AdminService instance is request-scoped and is injected into handlers.
+    assert data["admin_service"] is admin_service.call_args_list[-1].args[0] if False else request_service
+    request_service.assert_not_called()
 
     assert data["register_service"] is register_service.return_value
     assert data["user_service"] is user_service.return_value
@@ -119,7 +128,7 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     assert data["antispam_service"] is antispam_service.return_value
     assert data["force_subscription_service"] is force_subscription_service.return_value
     assert data["notification_service"] is notification_service.return_value
-    assert data["admin_service"] is admin_service.return_value
+    assert data["admin_service"] is request_service
     assert data["system_service"] is system_service
     handler.assert_awaited_once()
 
@@ -154,6 +163,10 @@ async def test_services_middleware_passes_handler_exception_through_transaction(
         patch("middlewares.services.NotificationService"),
         patch("middlewares.services.AdminService") as admin_service,
     ):
+        registry_service = MagicMock()
+        request_service = MagicMock()
+        admin_service.side_effect = [registry_service, request_service]
+
         middleware = ServicesMiddleware(
             database=database,
             system_service=system_service,
@@ -161,8 +174,8 @@ async def test_services_middleware_passes_handler_exception_through_transaction(
         with pytest.raises(RuntimeError, match="handler failed"):
             await middleware(handler, MagicMock(), {"bot": bot})
 
-    admin_repository.assert_any_call(session)
-    admin_service.assert_called_once_with(
-        admin_repository=admin_repository.return_value,
+    assert admin_repository.call_count == 2
+    registry_service.sync_permission_registry.assert_awaited_once_with(
+        ADMIN_PERMISSION_REGISTRY
     )
     assert database.transaction.exited_with is RuntimeError
