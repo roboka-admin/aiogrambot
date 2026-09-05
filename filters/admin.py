@@ -14,4 +14,4 @@ class AdminFilter(Filter):
     ) -> bool:
         if event.from_user is None:
             return False
-        return await admin_service.get_admin(event.from_user.id) is not None
+        return await admin_service.is_active_admin(event.from_user.id)
