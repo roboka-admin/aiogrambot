@@ -18,7 +18,7 @@ from callbacks.admin_support import (
     AdminSupportUserCallback,
 )
 from exceptions.user import UserNotFoundError
-from filters.admin import AdminFilter
+from filters.admin import AdminPermissionFilter
 from keyboards.admin_support import (
     admin_support_reply_cancel_keyboard,
     support_cleanup_confirm_keyboard,
@@ -34,8 +34,8 @@ from states.admin_support import AdminSupportStates
 
 
 router = Router()
-router.message.filter(AdminFilter())
-router.callback_query.filter(AdminFilter())
+router.message.filter(AdminPermissionFilter("support"))
+router.callback_query.filter(AdminPermissionFilter("support"))
 PAGE_SIZE = 10
 
 
@@ -125,10 +125,7 @@ async def start_support_reply_handler(callback: CallbackQuery, callback_data: Ad
 @router.message(AdminSupportStates.waiting_reply, F.text == "❌ لغو")
 async def cancel_support_reply_handler(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await message.answer(
-        "ارسال پاسخ لغو شد.",
-        reply_markup=ReplyKeyboardRemove(),
-    )
+    await message.answer("ارسال پاسخ لغو شد.", reply_markup=ReplyKeyboardRemove())
 
 
 @router.message(AdminSupportStates.waiting_reply)
@@ -137,10 +134,7 @@ async def send_support_reply_handler(message: Message, state: FSMContext, bot: B
     telegram_id = data.get("telegram_id")
     if not isinstance(telegram_id, int):
         await state.clear()
-        await message.answer(
-            "❌ اطلاعات گفتگو نامعتبر است.",
-            reply_markup=ReplyKeyboardRemove(),
-        )
+        await message.answer("❌ اطلاعات گفتگو نامعتبر است.", reply_markup=ReplyKeyboardRemove())
         return
 
     try:
@@ -151,10 +145,7 @@ async def send_support_reply_handler(message: Message, state: FSMContext, bot: B
         return
 
     await state.clear()
-    await message.answer(
-        "✅ پاسخ با موفقیت برای کاربر ارسال شد.",
-        reply_markup=ReplyKeyboardRemove(),
-    )
+    await message.answer("✅ پاسخ با موفقیت برای کاربر ارسال شد.", reply_markup=ReplyKeyboardRemove())
 
 
 @router.callback_query(AdminSupportActionCallback.filter(F.action.in_({"close", "reopen"})))
@@ -186,17 +177,12 @@ async def support_back_handler(callback: CallbackQuery, support_service: Support
 
 
 @router.callback_query(AdminSupportCleanupCallback.filter())
-async def support_cleanup_start_handler(
-    callback: CallbackQuery,
-    callback_data: AdminSupportCleanupCallback,
-    state: FSMContext,
-) -> None:
+async def support_cleanup_start_handler(callback: CallbackQuery, callback_data: AdminSupportCleanupCallback, state: FSMContext) -> None:
     action = callback_data.action
     if action == "delete_closed":
         text = "🗑 پاک‌سازی تیکت‌های بسته\n\nآیا مطمئن هستید که می‌خواهید همه تیکت‌های بسته را حذف کنید؟"
     else:
         text = "🗑 پاک‌سازی همه تیکت‌ها\n\nآیا مطمئن هستید که می‌خواهید همه تیکت‌ها را حذف کنید؟"
-
     await state.set_state(AdminSupportStates.waiting_cleanup_confirmation)
     await state.update_data(cleanup_action=action)
     await callback.message.edit_text(text, reply_markup=support_cleanup_confirm_keyboard(action=action))
@@ -204,33 +190,22 @@ async def support_cleanup_start_handler(
 
 
 @router.callback_query(AdminSupportCleanupConfirmCallback.filter(), AdminSupportStates.waiting_cleanup_confirmation)
-async def support_cleanup_confirm_handler(
-    callback: CallbackQuery,
-    callback_data: AdminSupportCleanupConfirmCallback,
-    state: FSMContext,
-    support_service: SupportService,
-) -> None:
+async def support_cleanup_confirm_handler(callback: CallbackQuery, callback_data: AdminSupportCleanupConfirmCallback, state: FSMContext, support_service: SupportService) -> None:
     data = await state.get_data()
     action = data.get("cleanup_action", callback_data.action)
-
     if action == "delete_closed":
         deleted_count = await support_service.delete_closed_tickets()
         result_text = f"✅ {deleted_count} تیکت بسته پاک‌سازی شد."
     else:
         deleted_count = await support_service.delete_all_tickets()
         result_text = f"✅ {deleted_count} تیکت پاک‌سازی شد."
-
     await state.clear()
     await _show_support_overview(message=callback.message, support_service=support_service, edit=True)
     await callback.answer(result_text, show_alert=True)
 
 
 @router.callback_query(AdminSupportCleanupCancelCallback.filter(), AdminSupportStates.waiting_cleanup_confirmation)
-async def support_cleanup_cancel_handler(
-    callback: CallbackQuery,
-    state: FSMContext,
-    support_service: SupportService,
-) -> None:
+async def support_cleanup_cancel_handler(callback: CallbackQuery, state: FSMContext, support_service: SupportService) -> None:
     await state.clear()
     await _show_support_overview(message=callback.message, support_service=support_service, edit=True)
     await callback.answer("پاک‌سازی لغو شد.")
@@ -244,20 +219,10 @@ async def _show_user_conversation(*, message: Message, telegram_id: int, status:
         user_text = f'<a href="tg://user?id={telegram_id}">{user_name}</a>'
     except UserNotFoundError:
         user_text = "کاربر پیدا نشد"
-
     status_text = "🟢 باز" if status is SupportStatus.OPEN else "⚪ بسته"
     await message.edit_text(
-        f"👤 کاربر: {user_text}\n"
-        f"🆔 <code>{telegram_id}</code>\n"
-        f"📌 وضعیت گفتگو: {status_text}\n"
-        f"📩 تعداد پیام‌ها: {len(tickets)}\n\n"
-        "برای مشاهده محتوای هر پیام، شماره تیکت را انتخاب کنید.",
-        reply_markup=support_user_messages_keyboard(
-            telegram_id=telegram_id,
-            status=status,
-            page=page,
-            tickets=tickets,
-        ),
+        f"👤 کاربر: {user_text}\n🆔 <code>{telegram_id}</code>\n📌 وضعیت گفتگو: {status_text}\n📩 تعداد پیام‌ها: {len(tickets)}\n\nبرای مشاهده محتوای هر پیام، شماره تیکت را انتخاب کنید.",
+        reply_markup=support_user_messages_keyboard(telegram_id=telegram_id, status=status, page=page, tickets=tickets),
         parse_mode="HTML",
     )
 
@@ -303,7 +268,6 @@ async def _send_ticket_content(*, bot: Bot, chat_id: int, ticket: SupportTicket,
     text = payload.get("text") or ""
     caption = payload.get("caption") or None
     file_id = payload.get("file_id")
-
     if content_type == "text":
         await bot.send_message(chat_id, text or "بدون متن", reply_markup=reply_markup)
     elif content_type == "photo" and file_id:
@@ -333,9 +297,4 @@ def _deserialize_message(message: str) -> dict[str, str]:
         return {"content_type": "text", "text": message}
     if not isinstance(payload, dict):
         return {"content_type": "unknown", "text": message}
-    return {
-        "content_type": str(payload.get("content_type") or "unknown"),
-        "text": str(payload.get("text") or ""),
-        "caption": str(payload.get("caption") or ""),
-        "file_id": str(payload.get("file_id") or ""),
-    }
+    return {"content_type": str(payload.get("content_type") or "unknown"), "text": str(payload.get("text") or ""), "caption": str(payload.get("caption") or ""), "file_id": str(payload.get("file_id") or "")}
