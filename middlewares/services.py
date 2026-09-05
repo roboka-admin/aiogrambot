@@ -37,16 +37,26 @@ class ServicesMiddleware(BaseMiddleware):
         self._admin_registry_lock = asyncio.Lock()
         self._admin_registry_synced = False
 
-    async def _ensure_admin_registry(self, admin_service: AdminService) -> None:
+    async def _ensure_admin_registry(self) -> None:
         if self._admin_registry_synced:
             return
         async with self._admin_registry_lock:
             if self._admin_registry_synced:
                 return
-            await admin_service.sync_permission_registry(ADMIN_PERMISSION_REGISTRY)
+            async with self._database.get_session() as session:
+                async with session.begin():
+                    admin_service = AdminService(
+                        admin_repository=AdminRepository(session)
+                    )
+                    await admin_service.sync_permission_registry(
+                        ADMIN_PERMISSION_REGISTRY
+                    )
+            # Only mark the registry ready after its transaction has committed.
             self._admin_registry_synced = True
 
     async def __call__(self, handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]], event: TelegramObject, data: dict[str, Any]) -> Any:
+        await self._ensure_admin_registry()
+
         async with self._database.get_session() as session:
             async with session.begin():
                 user_repository = UserRepository(session)
@@ -76,8 +86,6 @@ class ServicesMiddleware(BaseMiddleware):
                 )
                 notification_service = NotificationService(bot=data["bot"])
                 admin_service = AdminService(admin_repository=admin_repository)
-
-                await self._ensure_admin_registry(admin_service)
 
                 data["register_service"] = register_service
                 data["user_service"] = user_service
