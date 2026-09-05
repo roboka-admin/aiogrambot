@@ -45,13 +45,18 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
         patch("middlewares.services.BroadcastRepository") as broadcast_repository,
         patch("middlewares.services.AntiSpamRepository") as antispam_repository,
         patch("middlewares.services.BotSettingsRepository") as bot_settings_repository,
+        patch("middlewares.services.ForceSubscriptionRepository") as force_subscription_repository,
+        patch("middlewares.services.ForceSubscriptionEventRepository") as force_subscription_event_repository,
+        patch("middlewares.services.AdminRepository") as admin_repository,
         patch("middlewares.services.RegisterService") as register_service,
         patch("middlewares.services.UserService") as user_service,
         patch("middlewares.services.SupportService") as support_service,
         patch("middlewares.services.BotSettingsService") as bot_settings_service,
         patch("middlewares.services.BroadcastService") as broadcast_service,
         patch("middlewares.services.AntiSpamService") as antispam_service,
+        patch("middlewares.services.ForceSubscriptionService") as force_subscription_service,
         patch("middlewares.services.NotificationService") as notification_service,
+        patch("middlewares.services.AdminService") as admin_service,
     ):
         middleware = ServicesMiddleware(
             database=database,
@@ -61,13 +66,16 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
         result = await middleware(handler, MagicMock(), data)
 
     assert result == "handled"
-    session.begin.assert_called_once_with()
+    assert session.begin.call_count == 2
     assert database.transaction.exited_with is None
 
     user_repository.assert_called_once_with(session)
     support_repository.assert_called_once_with(session)
     antispam_repository.assert_called_once_with(session)
     bot_settings_repository.assert_called_once_with(session)
+    force_subscription_repository.assert_called_once_with(session)
+    force_subscription_event_repository.assert_called_once_with(session)
+    admin_repository.assert_any_call(session)
     broadcast_repository.assert_not_called()
 
     register_service.assert_called_once_with(
@@ -90,7 +98,18 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     antispam_service.assert_called_once_with(
         antispam_repository=antispam_repository.return_value,
     )
+    force_subscription_service.assert_called_once_with(
+        bot=bot,
+        repository=force_subscription_repository.return_value,
+        event_repository=force_subscription_event_repository.return_value,
+    )
     notification_service.assert_called_once_with(bot=bot)
+    admin_service.assert_called_once_with(
+        admin_repository=admin_repository.return_value,
+    )
+    admin_service.return_value.sync_permission_registry.assert_awaited_once_with(
+        __import__("core.admin_permissions", fromlist=["ADMIN_PERMISSION_REGISTRY"]).ADMIN_PERMISSION_REGISTRY
+    )
 
     assert data["register_service"] is register_service.return_value
     assert data["user_service"] is user_service.return_value
@@ -98,7 +117,9 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     assert data["bot_settings_service"] is bot_settings_service.return_value
     assert data["broadcast_service"] is broadcast_service.return_value
     assert data["antispam_service"] is antispam_service.return_value
+    assert data["force_subscription_service"] is force_subscription_service.return_value
     assert data["notification_service"] is notification_service.return_value
+    assert data["admin_service"] is admin_service.return_value
     assert data["system_service"] is system_service
     handler.assert_awaited_once()
 
@@ -120,13 +141,18 @@ async def test_services_middleware_passes_handler_exception_through_transaction(
         patch("middlewares.services.BroadcastRepository"),
         patch("middlewares.services.AntiSpamRepository"),
         patch("middlewares.services.BotSettingsRepository"),
+        patch("middlewares.services.ForceSubscriptionRepository"),
+        patch("middlewares.services.ForceSubscriptionEventRepository"),
+        patch("middlewares.services.AdminRepository") as admin_repository,
         patch("middlewares.services.RegisterService"),
         patch("middlewares.services.UserService"),
         patch("middlewares.services.SupportService"),
         patch("middlewares.services.BotSettingsService"),
         patch("middlewares.services.BroadcastService"),
         patch("middlewares.services.AntiSpamService"),
+        patch("middlewares.services.ForceSubscriptionService"),
         patch("middlewares.services.NotificationService"),
+        patch("middlewares.services.AdminService") as admin_service,
     ):
         middleware = ServicesMiddleware(
             database=database,
@@ -135,4 +161,8 @@ async def test_services_middleware_passes_handler_exception_through_transaction(
         with pytest.raises(RuntimeError, match="handler failed"):
             await middleware(handler, MagicMock(), {"bot": bot})
 
+    admin_repository.assert_any_call(session)
+    admin_service.assert_called_once_with(
+        admin_repository=admin_repository.return_value,
+    )
     assert database.transaction.exited_with is RuntimeError
