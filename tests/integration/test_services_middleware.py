@@ -60,6 +60,7 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
         patch("middlewares.services.AdminService") as admin_service,
     ):
         registry_service = MagicMock()
+        registry_service.sync_permission_registry = AsyncMock()
         request_service = MagicMock()
         admin_service.side_effect = [registry_service, request_service]
 
@@ -161,6 +162,7 @@ async def test_services_middleware_passes_handler_exception_through_transaction(
         patch("middlewares.services.AdminService") as admin_service,
     ):
         registry_service = MagicMock()
+        registry_service.sync_permission_registry = AsyncMock()
         request_service = MagicMock()
         admin_service.side_effect = [registry_service, request_service]
 
