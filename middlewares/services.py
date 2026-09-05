@@ -5,6 +5,7 @@ from typing import Any, Awaitable, Callable
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
+from core.admin_permissions import ADMIN_PERMISSION_REGISTRY
 from core.database import Database
 from repositories.admin import AdminRepository
 from repositories.antispam import AntiSpamRepository
@@ -33,6 +34,17 @@ class ServicesMiddleware(BaseMiddleware):
         self._database = database
         self._system_service = system_service
         self._broadcast_lock = asyncio.Lock()
+        self._admin_registry_lock = asyncio.Lock()
+        self._admin_registry_synced = False
+
+    async def _ensure_admin_registry(self, admin_service: AdminService) -> None:
+        if self._admin_registry_synced:
+            return
+        async with self._admin_registry_lock:
+            if self._admin_registry_synced:
+                return
+            await admin_service.sync_permission_registry(ADMIN_PERMISSION_REGISTRY)
+            self._admin_registry_synced = True
 
     async def __call__(self, handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]], event: TelegramObject, data: dict[str, Any]) -> Any:
         async with self._database.get_session() as session:
@@ -64,6 +76,8 @@ class ServicesMiddleware(BaseMiddleware):
                 )
                 notification_service = NotificationService(bot=data["bot"])
                 admin_service = AdminService(admin_repository=admin_repository)
+
+                await self._ensure_admin_registry(admin_service)
 
                 data["register_service"] = register_service
                 data["user_service"] = user_service
