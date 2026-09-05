@@ -1,8 +1,8 @@
 from aiogram import F, Router
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery
 
 from callbacks.admin import AdminStatsRefreshCallback
+from core.telegram import edit_message_if_changed
 from filters.admin import AdminFilter
 from keyboards.admin_stats import (
     antispam_stats_keyboard,
@@ -17,20 +17,6 @@ from services.user import UserService
 
 router = Router()
 router.callback_query.filter(AdminFilter())
-
-
-async def _edit_message_if_changed(*, message, text: str, reply_markup) -> None:
-    if message is None:
-        return
-
-    if message.text == text and message.reply_markup == reply_markup:
-        return
-
-    try:
-        await message.edit_text(text, reply_markup=reply_markup)
-    except TelegramBadRequest as exc:
-        if "message is not modified" not in str(exc).lower():
-            raise
 
 
 @router.callback_query(AdminStatsRefreshCallback.filter(F.section == "users"))
@@ -51,7 +37,7 @@ async def user_stats_refresh_handler(
         f"🟡 فعال ۷ روز اخیر: {stats['active_7d']:,}\n"
         f"⚫ غیرفعال بیش از ۳۰ روز: {stats['inactive_30d']:,}"
     )
-    await _edit_message_if_changed(
+    await edit_message_if_changed(
         message=callback.message,
         text=text,
         reply_markup=user_stats_keyboard(),
@@ -75,7 +61,7 @@ async def support_stats_refresh_handler(
         f"📝 ۷ روز اخیر: {stats['last_7_days']:,}\n"
         f"📝 ۳۰ روز اخیر: {stats['last_30_days']:,}"
     )
-    await _edit_message_if_changed(
+    await edit_message_if_changed(
         message=callback.message,
         text=text,
         reply_markup=support_stats_keyboard(),
@@ -124,7 +110,7 @@ async def broadcast_stats_refresh_handler(
             f"⏱ مدت زمان: {duration_str}"
         )
 
-    await _edit_message_if_changed(
+    await edit_message_if_changed(
         message=callback.message,
         text=text,
         reply_markup=broadcast_stats_keyboard(),
@@ -147,7 +133,7 @@ async def antispam_stats_refresh_handler(
         f"📝 ۷ روز اخیر: {stats['last_7_days']:,}\n"
         f"📝 ۳۰ روز اخیر: {stats['last_30_days']:,}"
     )
-    await _edit_message_if_changed(
+    await edit_message_if_changed(
         message=callback.message,
         text=text,
         reply_markup=antispam_stats_keyboard(),
