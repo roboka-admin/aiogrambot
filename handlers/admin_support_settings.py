@@ -5,7 +5,7 @@ from callbacks.admin_support import (
     AdminSupportSettingsBackCallback,
     AdminSupportSettingsCallback,
 )
-from filters.admin import AdminFilter
+from filters.admin import AdminPermissionFilter
 from keyboards.admin_support import (
     support_overview_keyboard,
     support_settings_keyboard,
@@ -15,7 +15,7 @@ from services.support import SupportService
 
 
 router = Router()
-router.callback_query.filter(AdminFilter())
+router.callback_query.filter(AdminPermissionFilter("support"))
 
 
 @router.callback_query(AdminSupportSettingsCallback.filter())
