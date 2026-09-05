@@ -13,11 +13,23 @@ class AdminService:
     async def get_admin(self, telegram_id: int) -> Admin | None:
         return await self._admin_repository.get(telegram_id)
 
+    async def is_active_admin(self, telegram_id: int) -> bool:
+        admin = await self._admin_repository.get(telegram_id)
+        return admin is not None and admin.status is AdminStatus.ACTIVE
+
     async def add_admin(self, telegram_id: int) -> Admin:
         existing = await self._admin_repository.get(telegram_id)
         if existing is not None:
             return existing
         return await self._admin_repository.create(Admin(telegram_id=telegram_id))
+
+    async def ensure_owner(self, telegram_id: int) -> Admin:
+        existing = await self._admin_repository.get(telegram_id)
+        if existing is not None:
+            return existing
+        return await self._admin_repository.create(
+            Admin(telegram_id=telegram_id, role=AdminRole.OWNER)
+        )
 
     async def deactivate_admin(self, telegram_id: int) -> None:
         await self._admin_repository.set_status(telegram_id, AdminStatus.INACTIVE.value)
