@@ -1,5 +1,3 @@
-from collections.abc import Awaitable, Callable
-
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import InlineKeyboardMarkup, Message
 
