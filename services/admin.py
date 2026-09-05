@@ -19,14 +19,6 @@ class AdminService:
             return existing
         return await self._admin_repository.create(Admin(telegram_id=telegram_id))
 
-    async def ensure_owner(self, telegram_id: int) -> Admin:
-        existing = await self._admin_repository.get(telegram_id)
-        if existing is not None:
-            return existing
-        return await self._admin_repository.create(
-            Admin(telegram_id=telegram_id, role=AdminRole.OWNER)
-        )
-
     async def deactivate_admin(self, telegram_id: int) -> None:
         await self._admin_repository.set_status(telegram_id, AdminStatus.INACTIVE.value)
 
