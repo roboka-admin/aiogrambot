@@ -6,6 +6,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
 from core.database import Database
+from repositories.admin import AdminRepository
 from repositories.antispam import AntiSpamRepository
 from repositories.bot_settings import BotSettingsRepository
 from repositories.broadcast import BroadcastRepository
@@ -13,6 +14,7 @@ from repositories.force_subscription import ForceSubscriptionRepository
 from repositories.force_subscription_event import ForceSubscriptionEventRepository
 from repositories.support import SupportRepository
 from repositories.user import UserRepository
+from services.admin import AdminService
 from services.antispam import AntiSpamService
 from services.bot_settings import BotSettingsService
 from services.broadcast import BroadcastService
@@ -41,6 +43,7 @@ class ServicesMiddleware(BaseMiddleware):
                 bot_settings_repository = BotSettingsRepository(session)
                 force_subscription_repository = ForceSubscriptionRepository(session)
                 force_subscription_event_repository = ForceSubscriptionEventRepository(session)
+                admin_repository = AdminRepository(session)
 
                 @asynccontextmanager
                 async def broadcast_repository_scope():
@@ -60,6 +63,7 @@ class ServicesMiddleware(BaseMiddleware):
                     event_repository=force_subscription_event_repository,
                 )
                 notification_service = NotificationService(bot=data["bot"])
+                admin_service = AdminService(admin_repository=admin_repository)
 
                 data["register_service"] = register_service
                 data["user_service"] = user_service
@@ -69,6 +73,7 @@ class ServicesMiddleware(BaseMiddleware):
                 data["antispam_service"] = antispam_service
                 data["force_subscription_service"] = force_subscription_service
                 data["notification_service"] = notification_service
+                data["admin_service"] = admin_service
                 data["system_service"] = self._system_service
 
                 return await handler(event, data)
