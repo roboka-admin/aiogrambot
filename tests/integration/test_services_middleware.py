@@ -20,6 +20,16 @@ class TransactionContext:
         return False
 
 
+class FakeDatabase:
+    def __init__(self, session):
+        self.session = session
+        self.transaction = TransactionContext()
+
+    @asynccontextmanager
+    async def get_session(self):
+        yield self.session
+
+
 @pytest.mark.asyncio
 async def test_services_middleware_creates_and_injects_request_scoped_dependencies():
     session = MagicMock()
