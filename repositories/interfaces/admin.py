@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 
-from models.admin import Admin, AdminPermission, AdminPermissionAssignment
+from models.admin import Admin, AdminPermission
 
 
 class IAdminRepository(ABC):
@@ -9,7 +9,13 @@ class IAdminRepository(ABC):
     async def get(self, telegram_id: int) -> Admin | None: ...
 
     @abstractmethod
+    async def list_admins(self) -> Sequence[Admin]: ...
+
+    @abstractmethod
     async def create(self, admin: Admin) -> Admin: ...
+
+    @abstractmethod
+    async def delete(self, telegram_id: int) -> None: ...
 
     @abstractmethod
     async def set_status(self, telegram_id: int, status: str) -> None: ...
