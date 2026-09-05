@@ -6,6 +6,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+from models.admin_db import (
+    AdminPermissionAssignmentRecord,
+    AdminPermissionRecord,
+    AdminRecord,
+)
 from models.antispam_db import AntiSpamEventRecord
 from models.base import Base
 from models.bot_settings_db import BotSettingsRecord
@@ -23,6 +28,9 @@ _ = (
     BotSettingsRecord,
     ForceSubscriptionTargetRecord,
     ForceSubscriptionMembershipEventRecord,
+    AdminRecord,
+    AdminPermissionRecord,
+    AdminPermissionAssignmentRecord,
 )
 
 
@@ -76,6 +84,7 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
         assert "0002_add_bot_settings -> 0003_add_antispam_enabled" in output
         assert "0003_add_antispam_enabled -> 0004_add_force_subscription" in output
         assert "0004_add_force_subscription -> 0005_membership_events" in output
+        assert "0005_membership_events -> 0006_admin_foundation" in output
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
             tables = set((await session.execute(text("SHOW TABLES"))).scalars())
@@ -102,9 +111,12 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
             "bot_settings",
             "force_subscription_targets",
             "force_subscription_membership_events",
+            "admins",
+            "admin_permissions",
+            "admin_permission_assignments",
             "alembic_version",
         }.issubset(tables)
-        assert revision == "0005_membership_events"
+        assert revision == "0006_admin_foundation"
         assert settings_count == 1
         assert antispam_enabled == 1
         assert force_subscription_enabled == 0
