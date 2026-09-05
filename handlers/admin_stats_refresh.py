@@ -3,7 +3,7 @@ from aiogram.types import CallbackQuery
 
 from callbacks.admin import AdminStatsRefreshCallback
 from core.telegram import edit_message_if_changed
-from filters.admin import AdminFilter
+from filters.admin import AdminPermissionFilter
 from keyboards.admin_stats import (
     antispam_stats_keyboard,
     broadcast_stats_keyboard,
@@ -16,14 +16,11 @@ from services.support import SupportService
 from services.user import UserService
 
 router = Router()
-router.callback_query.filter(AdminFilter())
+router.callback_query.filter(AdminPermissionFilter("stats"))
 
 
 @router.callback_query(AdminStatsRefreshCallback.filter(F.section == "users"))
-async def user_stats_refresh_handler(
-    callback: CallbackQuery,
-    user_service: UserService,
-) -> None:
+async def user_stats_refresh_handler(callback: CallbackQuery, user_service: UserService) -> None:
     stats = await user_service.get_user_statistics()
     text = (
         "👥 آمار کاربران\n\n"
@@ -37,19 +34,12 @@ async def user_stats_refresh_handler(
         f"🟡 فعال ۷ روز اخیر: {stats['active_7d']:,}\n"
         f"⚫ غیرفعال بیش از ۳۰ روز: {stats['inactive_30d']:,}"
     )
-    await edit_message_if_changed(
-        message=callback.message,
-        text=text,
-        reply_markup=user_stats_keyboard(),
-    )
+    await edit_message_if_changed(message=callback.message, text=text, reply_markup=user_stats_keyboard())
     await callback.answer("بروزرسانی شد.")
 
 
 @router.callback_query(AdminStatsRefreshCallback.filter(F.section == "support"))
-async def support_stats_refresh_handler(
-    callback: CallbackQuery,
-    support_service: SupportService,
-) -> None:
+async def support_stats_refresh_handler(callback: CallbackQuery, support_service: SupportService) -> None:
     stats = await support_service.get_support_statistics()
     text = (
         "🆘 آمار پشتیبانی\n\n"
@@ -61,26 +51,17 @@ async def support_stats_refresh_handler(
         f"📝 ۷ روز اخیر: {stats['last_7_days']:,}\n"
         f"📝 ۳۰ روز اخیر: {stats['last_30_days']:,}"
     )
-    await edit_message_if_changed(
-        message=callback.message,
-        text=text,
-        reply_markup=support_stats_keyboard(),
-    )
+    await edit_message_if_changed(message=callback.message, text=text, reply_markup=support_stats_keyboard())
     await callback.answer("بروزرسانی شد.")
 
 
 @router.callback_query(AdminStatsRefreshCallback.filter(F.section == "broadcast"))
-async def broadcast_stats_refresh_handler(
-    callback: CallbackQuery,
-    broadcast_service: BroadcastService,
-) -> None:
+async def broadcast_stats_refresh_handler(callback: CallbackQuery, broadcast_service: BroadcastService) -> None:
     stats = await broadcast_service.get_broadcast_statistics()
-
     if stats["latest_total_recipients"] is None:
         text = "📢 آمار همگانی\n\nهنوز هیچ پیام همگانی ارسال نشده است."
     else:
         from core.timezone import TEHRAN_TZ
-
         latest_dt = stats["latest_created_at"]
         if latest_dt is not None:
             if latest_dt.tzinfo is None:
@@ -88,12 +69,10 @@ async def broadcast_stats_refresh_handler(
             latest_str = latest_dt.strftime("%Y/%m/%d - %H:%M")
         else:
             latest_str = "—"
-
         duration = stats["latest_duration_seconds"]
         minutes, seconds = divmod(duration, 60)
         duration_str = f"{minutes} دقیقه و {seconds} ثانیه" if minutes else f"{seconds} ثانیه"
         success_rate = stats["latest_success_rate"]
-
         text = (
             "📢 آمار همگانی\n\n"
             f"📨 کل ارسال‌ها: {stats['total_broadcasts']:,}\n\n"
@@ -109,20 +88,12 @@ async def broadcast_stats_refresh_handler(
             f"📅 زمان ارسال:\n{latest_str}\n"
             f"⏱ مدت زمان: {duration_str}"
         )
-
-    await edit_message_if_changed(
-        message=callback.message,
-        text=text,
-        reply_markup=broadcast_stats_keyboard(),
-    )
+    await edit_message_if_changed(message=callback.message, text=text, reply_markup=broadcast_stats_keyboard())
     await callback.answer("بروزرسانی شد.")
 
 
 @router.callback_query(AdminStatsRefreshCallback.filter(F.section == "antispam"))
-async def antispam_stats_refresh_handler(
-    callback: CallbackQuery,
-    antispam_service: AntiSpamService,
-) -> None:
+async def antispam_stats_refresh_handler(callback: CallbackQuery, antispam_service: AntiSpamService) -> None:
     stats = await antispam_service.get_antispam_statistics()
     text = (
         "🛡️ آمار ضداسپم\n\n"
@@ -133,9 +104,5 @@ async def antispam_stats_refresh_handler(
         f"📝 ۷ روز اخیر: {stats['last_7_days']:,}\n"
         f"📝 ۳۰ روز اخیر: {stats['last_30_days']:,}"
     )
-    await edit_message_if_changed(
-        message=callback.message,
-        text=text,
-        reply_markup=antispam_stats_keyboard(),
-    )
+    await edit_message_if_changed(message=callback.message, text=text, reply_markup=antispam_stats_keyboard())
     await callback.answer("بروزرسانی شد.")
