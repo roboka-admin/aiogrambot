@@ -24,6 +24,12 @@ class AdminRepository(IAdminRepository):
         record = result.scalar_one_or_none()
         return self._to_domain(record) if record else None
 
+    async def list_admins(self) -> Sequence[Admin]:
+        result = await self._session.execute(
+            select(AdminRecord).order_by(AdminRecord.created_at, AdminRecord.telegram_id)
+        )
+        return [self._to_domain(record) for record in result.scalars()]
+
     async def create(self, admin: Admin) -> Admin:
         record = AdminRecord(
             telegram_id=admin.telegram_id,
@@ -35,6 +41,12 @@ class AdminRepository(IAdminRepository):
         self._session.add(record)
         await self._session.flush()
         return self._to_domain(record)
+
+    async def delete(self, telegram_id: int) -> None:
+        await self._session.execute(
+            delete(AdminRecord).where(AdminRecord.telegram_id == telegram_id)
+        )
+        await self._session.flush()
 
     async def set_status(self, telegram_id: int, status: str) -> None:
         record = await self._get_record(telegram_id)
