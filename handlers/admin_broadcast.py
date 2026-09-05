@@ -10,15 +10,15 @@ from callbacks.admin import (
     AdminBroadcastEditCallback,
     AdminBroadcastStartCallback,
 )
-from filters.admin import AdminFilter
+from filters.admin import AdminPermissionFilter
 from keyboards.admin_broadcast import broadcast_cancel_keyboard, broadcast_preview_keyboard
 from services.broadcast import BroadcastProgress, BroadcastService
 from states.admin import AdminBroadcastStates
 from validators.broadcast import validate_broadcast_message
 
 router = Router()
-router.message.filter(AdminFilter())
-router.callback_query.filter(AdminFilter())
+router.message.filter(AdminPermissionFilter("broadcast"))
+router.callback_query.filter(AdminPermissionFilter("broadcast"))
 
 logger = logging.getLogger(__name__)
 
