@@ -1,15 +1,15 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
-from filters.admin import AdminFilter
+from filters.admin import AdminPermissionFilter
 from keyboards.admin_settings import admin_settings_keyboard
 from models.bot_settings import BotSettings
 from services.bot_settings import BotSettingsService
 
 
 router = Router()
-router.message.filter(AdminFilter())
-router.callback_query.filter(AdminFilter())
+router.message.filter(AdminPermissionFilter("settings"))
+router.callback_query.filter(AdminPermissionFilter("settings"))
 
 
 @router.message(F.text == "⚙️ تنظیمات ربات")
