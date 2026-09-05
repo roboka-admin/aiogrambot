@@ -61,3 +61,25 @@ class AdminForceSubscriptionStatsTargetRefreshCallback(
     CallbackData, prefix="admin_force_subscription_stats_target_refresh"
 ):
     chat_id: int
+
+
+class AdminManagementCallback(CallbackData, prefix="admin_management"):
+    action: str
+    telegram_id: int = 0
+
+
+class AdminPermissionCallback(CallbackData, prefix="admin_permission"):
+    telegram_id: int
+    permission_key: str
+
+
+class AdminCreatePermissionCallback(CallbackData, prefix="admin_create_permission"):
+    permission_key: str
+
+
+class AdminCreateConfirmCallback(CallbackData, prefix="admin_create_confirm"):
+    pass
+
+
+class AdminCreateCancelCallback(CallbackData, prefix="admin_create_cancel"):
+    pass
