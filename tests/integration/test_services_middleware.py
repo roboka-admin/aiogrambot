@@ -20,16 +20,6 @@ class TransactionContext:
         return False
 
 
-class FakeDatabase:
-    def __init__(self, session):
-        self.session = session
-        self.transaction = TransactionContext()
-
-    @asynccontextmanager
-    async def get_session(self):
-        yield self.session
-
-
 @pytest.mark.asyncio
 async def test_services_middleware_creates_and_injects_request_scoped_dependencies():
     session = MagicMock()
@@ -41,6 +31,7 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     data = {"bot": bot}
 
     with (
+        patch("middlewares.services.ADMIN_IDS", {101, 202}),
         patch("middlewares.services.UserRepository") as user_repository,
         patch("middlewares.services.SupportRepository") as support_repository,
         patch("middlewares.services.BroadcastRepository") as broadcast_repository,
@@ -61,6 +52,7 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     ):
         registry_service = MagicMock()
         registry_service.sync_permission_registry = AsyncMock()
+        registry_service.ensure_owner = AsyncMock()
         request_service = MagicMock()
         admin_service.side_effect = [registry_service, request_service]
 
@@ -90,6 +82,9 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     registry_service.sync_permission_registry.assert_awaited_once_with(
         ADMIN_PERMISSION_REGISTRY
     )
+    assert registry_service.ensure_owner.await_count == 2
+    registry_service.ensure_owner.assert_any_await(101)
+    registry_service.ensure_owner.assert_any_await(202)
 
     register_service.assert_called_once_with(
         user_repository=user_repository.return_value,
@@ -143,6 +138,7 @@ async def test_services_middleware_passes_handler_exception_through_transaction(
         raise RuntimeError("handler failed")
 
     with (
+        patch("middlewares.services.ADMIN_IDS", {101}),
         patch("middlewares.services.UserRepository"),
         patch("middlewares.services.SupportRepository"),
         patch("middlewares.services.BroadcastRepository"),
@@ -163,6 +159,7 @@ async def test_services_middleware_passes_handler_exception_through_transaction(
     ):
         registry_service = MagicMock()
         registry_service.sync_permission_registry = AsyncMock()
+        registry_service.ensure_owner = AsyncMock()
         request_service = MagicMock()
         admin_service.side_effect = [registry_service, request_service]
 
@@ -178,4 +175,5 @@ async def test_services_middleware_passes_handler_exception_through_transaction(
     registry_service.sync_permission_registry.assert_awaited_once_with(
         ADMIN_PERMISSION_REGISTRY
     )
+    registry_service.ensure_owner.assert_awaited_once_with(101)
     assert database.transaction.exited_with is RuntimeError
