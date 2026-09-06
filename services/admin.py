@@ -11,6 +11,12 @@ class AdminService:
     def __init__(self, *, admin_repository: IAdminRepository) -> None:
         self._admin_repository = admin_repository
 
+    async def bootstrap(self, owner_telegram_ids: Sequence[int]) -> None:
+        """Initialize configured owners and the permission registry at application startup."""
+        await self.sync_permission_registry(ADMIN_PERMISSION_REGISTRY)
+        for telegram_id in owner_telegram_ids:
+            await self.ensure_owner(telegram_id)
+
     async def get_admin(self, telegram_id: int) -> Admin | None:
         return await self._admin_repository.get(telegram_id)
 
