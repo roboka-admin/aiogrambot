@@ -6,18 +6,11 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from datetime import timedelta
 
-from aiogram import Bot
-from aiogram.exceptions import (
-    TelegramAPIError,
-    TelegramForbiddenError,
-    TelegramNotFound,
-    TelegramRetryAfter,
-)
-
 from core.timezone import tehran_now
 from models.broadcast import BroadcastRecord
 from repositories.interfaces.broadcast import IBroadcastRepository
 from repositories.interfaces.user import IUserRepository
+from services.telegram import TelegramGateway, TelegramGatewayError, TelegramRateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +60,7 @@ class BroadcastService:
     def __init__(
         self,
         *,
-        bot: Bot,
+        telegram_gateway: TelegramGateway,
         user_repository: IUserRepository | None = None,
         broadcast_repository: IBroadcastRepository | None = None,
         repository_factory: BroadcastRepositoryFactory | None = None,
@@ -83,7 +76,7 @@ class BroadcastService:
         self._user_repository = user_repository
         self._broadcast_repository = broadcast_repository
         self._repository_factory = repository_factory
-        self._bot = bot
+        self._telegram_gateway = telegram_gateway
         self._broadcast_lock = broadcast_lock
 
     @asynccontextmanager
@@ -198,10 +191,7 @@ class BroadcastService:
                     message_id=message_id,
                 )
                 success += 1
-            except (TelegramForbiddenError, TelegramNotFound) as exc:
-                failed += 1
-                logger.info("Broadcast unavailable for user %s: %s", telegram_id, exc)
-            except TelegramAPIError as exc:
+            except TelegramGatewayError as exc:
                 failed += 1
                 logger.warning("Broadcast failed for user %s: %s", telegram_id, exc)
             except Exception:
@@ -254,13 +244,13 @@ class BroadcastService:
     ) -> None:
         for attempt in range(1, _MAX_RETRY_AFTER_ATTEMPTS + 1):
             try:
-                await self._bot.copy_message(
+                await self._telegram_gateway.copy_message(
                     chat_id=chat_id,
                     from_chat_id=from_chat_id,
                     message_id=message_id,
                 )
                 return
-            except TelegramRetryAfter as exc:
+            except TelegramRateLimitError as exc:
                 if attempt == _MAX_RETRY_AFTER_ATTEMPTS:
                     raise
 

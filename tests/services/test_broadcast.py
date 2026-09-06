@@ -1,13 +1,11 @@
-import asyncio
 from datetime import timedelta
 
 import pytest
-from aiogram.exceptions import TelegramRetryAfter
-from aiogram.methods import SendMessage
 
 from core.timezone import tehran_now
 from models.broadcast import BroadcastRecord
 from services.broadcast import BroadcastProgress, BroadcastService
+from services.telegram import TelegramRateLimitError
 
 
 class FakeUserRepository:
@@ -46,7 +44,7 @@ class FakeBroadcastRepository:
         return max(self.records, key=lambda record: record.id or 0)
 
 
-class FakeBot:
+class FakeTelegramGateway:
     def __init__(self, failures: dict[int, Exception] | None = None) -> None:
         self.failures = failures or {}
         self.sent: list[int] = []
@@ -60,20 +58,12 @@ class FakeBot:
         self.sent.append(chat_id)
 
 
-def make_retry_after(seconds: int = 0) -> TelegramRetryAfter:
-    return TelegramRetryAfter(
-        method=SendMessage(chat_id=1, text="test"),
-        message="retry",
-        retry_after=seconds,
-    )
-
-
 @pytest.mark.asyncio
 async def test_count_recipients_uses_active_user_ids():
     service = BroadcastService(
         user_repository=FakeUserRepository([1, 2, 3]),
         broadcast_repository=FakeBroadcastRepository(),
-        bot=FakeBot(),
+        telegram_gateway=FakeTelegramGateway(),
     )
     assert await service.count_recipients() == 3
 
@@ -83,7 +73,7 @@ async def test_broadcast_statistics_without_history():
     service = BroadcastService(
         user_repository=FakeUserRepository([]),
         broadcast_repository=FakeBroadcastRepository(),
-        bot=FakeBot(),
+        telegram_gateway=FakeTelegramGateway(),
     )
 
     stats = await service.get_broadcast_statistics()
@@ -120,7 +110,7 @@ async def test_broadcast_statistics_with_latest_record():
     service = BroadcastService(
         user_repository=FakeUserRepository([]),
         broadcast_repository=repository,
-        bot=FakeBot(),
+        telegram_gateway=FakeTelegramGateway(),
     )
 
     stats = await service.get_broadcast_statistics()
@@ -132,6 +122,7 @@ async def test_broadcast_statistics_with_latest_record():
     assert stats["latest_total_recipients"] == 5
     assert stats["latest_success"] == 4
     assert stats["latest_failed"] == 1
+    assert stats["latest_duration_seconds"] == 2
     assert stats["latest_success_rate"] == 80.0
 
 
@@ -141,7 +132,7 @@ async def test_broadcast_empty_recipient_list():
     service = BroadcastService(
         user_repository=FakeUserRepository([]),
         broadcast_repository=repository,
-        bot=FakeBot(),
+        telegram_gateway=FakeTelegramGateway(),
     )
     result = await service.broadcast(from_chat_id=1, message_id=2)
     assert result.total == 0
@@ -153,38 +144,36 @@ async def test_broadcast_empty_recipient_list():
 @pytest.mark.asyncio
 async def test_broadcast_counts_success_and_failure():
     repository = FakeBroadcastRepository()
-    bot = FakeBot(failures={2: RuntimeError("send failed")})
+    gateway = FakeTelegramGateway(failures={2: RuntimeError("send failed")})
     service = BroadcastService(
         user_repository=FakeUserRepository([1, 2, 3]),
         broadcast_repository=repository,
-        bot=bot,
+        telegram_gateway=gateway,
     )
     result = await service.broadcast(from_chat_id=10, message_id=20)
     assert result.total == 3
     assert result.success == 2
     assert result.failed == 1
-    assert bot.sent == [1, 3]
+    assert gateway.sent == [1, 3]
     assert repository.records[0].success_count == 2
     assert repository.records[0].failed_count == 1
 
 
 @pytest.mark.asyncio
 async def test_broadcast_retries_after_flood_limit_and_then_succeeds():
-    retry = make_retry_after(0)
-    bot = FakeBot(failures={2: retry})
+    gateway = FakeTelegramGateway(failures={2: TelegramRateLimitError(0)})
     service = BroadcastService(
         user_repository=FakeUserRepository([2]),
         broadcast_repository=FakeBroadcastRepository(),
-        bot=bot,
+        telegram_gateway=gateway,
     )
 
-    # The fake always raises, so this exercises the retry/exhaustion path.
     result = await service.broadcast(from_chat_id=10, message_id=20)
 
     assert result.total == 1
     assert result.success == 0
     assert result.failed == 1
-    assert bot.calls[2] == 3
+    assert gateway.calls[2] == 3
 
 
 @pytest.mark.asyncio
@@ -193,7 +182,7 @@ async def test_broadcast_progress_reports_at_interval_and_completion():
     service = BroadcastService(
         user_repository=FakeUserRepository([1, 2, 3]),
         broadcast_repository=repository,
-        bot=FakeBot(),
+        telegram_gateway=FakeTelegramGateway(),
     )
     progress: list[BroadcastProgress] = []
 
@@ -238,7 +227,7 @@ async def test_broadcast_rejects_invalid_progress_interval():
     service = BroadcastService(
         user_repository=FakeUserRepository([]),
         broadcast_repository=FakeBroadcastRepository(),
-        bot=FakeBot(),
+        telegram_gateway=FakeTelegramGateway(),
     )
     with pytest.raises(ValueError):
         await service.broadcast(from_chat_id=1, message_id=2, progress_interval=0)

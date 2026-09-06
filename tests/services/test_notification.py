@@ -1,10 +1,10 @@
 import pytest
-from aiogram.exceptions import TelegramAPIError
 
 from services.notification import NotificationService
+from services.telegram import TelegramGatewayError
 
 
-class FakeBot:
+class FakeTelegramGateway:
     def __init__(self, error: Exception | None = None) -> None:
         self.error = error
         self.messages: list[tuple[int, str]] = []
@@ -17,24 +17,24 @@ class FakeBot:
 
 @pytest.mark.asyncio
 async def test_warning_notification_contains_warning_count():
-    bot = FakeBot()
-    service = NotificationService(bot=bot)
+    gateway = FakeTelegramGateway()
+    service = NotificationService(telegram_gateway=gateway)
     await service.warning_added(123, 2)
-    assert bot.messages == [(123, "⚠️ یک اخطار توسط مدیریت برای شما ثبت شد.\nتعداد اخطار فعلی: 2 از 3")]
+    assert gateway.messages == [(123, "⚠️ یک اخطار توسط مدیریت برای شما ثبت شد.\nتعداد اخطار فعلی: 2 از 3")]
 
 
 @pytest.mark.asyncio
 async def test_block_notification_is_sent():
-    bot = FakeBot()
-    service = NotificationService(bot=bot)
+    gateway = FakeTelegramGateway()
+    service = NotificationService(telegram_gateway=gateway)
     await service.user_auto_blocked(123)
-    assert bot.messages[0][0] == 123
-    assert "مسدود شد" in bot.messages[0][1]
+    assert gateway.messages[0][0] == 123
+    assert "مسدود شد" in gateway.messages[0][1]
 
 
 @pytest.mark.asyncio
 async def test_notification_delivery_error_does_not_escape():
-    bot = FakeBot(error=TelegramAPIError(method="sendMessage", message="send failed"))
-    service = NotificationService(bot=bot)
+    gateway = FakeTelegramGateway(error=TelegramGatewayError("send failed"))
+    service = NotificationService(telegram_gateway=gateway)
     await service.user_blocked(123)
-    assert bot.messages == []
+    assert gateway.messages == []

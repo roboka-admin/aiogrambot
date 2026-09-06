@@ -1,10 +1,10 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
 from models.force_subscription import ForceSubscriptionTarget, ForceSubscriptionTargetType
 from services.force_subscription import ForceSubscriptionService, MembershipStatus
+from services.telegram import TelegramGatewayError
 
 
 def target(chat_id: int = -1001) -> ForceSubscriptionTarget:
@@ -20,7 +20,7 @@ def target(chat_id: int = -1001) -> ForceSubscriptionTarget:
 async def test_no_active_targets_allows_user() -> None:
     repository = MagicMock()
     repository.list_active = AsyncMock(return_value=[])
-    service = ForceSubscriptionService(bot=MagicMock(), repository=repository)
+    service = ForceSubscriptionService(telegram_gateway=MagicMock(), repository=repository)
     result = await service.check_membership(user_telegram_id=10)
     assert result.is_allowed is True
     assert result.targets == ()
@@ -29,11 +29,11 @@ async def test_no_active_targets_allows_user() -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("status", ["member", "administrator", "creator"])
 async def test_member_statuses_are_satisfied(status: str) -> None:
-    bot = MagicMock()
-    bot.get_chat_member = AsyncMock(return_value=MagicMock(status=status))
+    gateway = MagicMock()
+    gateway.get_chat_member = AsyncMock(return_value=status)
     repository = MagicMock()
     repository.list_active = AsyncMock(return_value=[target()])
-    service = ForceSubscriptionService(bot=bot, repository=repository)
+    service = ForceSubscriptionService(telegram_gateway=gateway, repository=repository)
     result = await service.check_membership(user_telegram_id=10)
     assert result.is_allowed is True
     assert result.targets[0].status is MembershipStatus(status)
@@ -42,11 +42,11 @@ async def test_member_statuses_are_satisfied(status: str) -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("status", ["left", "kicked", "restricted", "unknown"])
 async def test_unsatisfied_status_blocks_user(status: str) -> None:
-    bot = MagicMock()
-    bot.get_chat_member = AsyncMock(return_value=MagicMock(status=status))
+    gateway = MagicMock()
+    gateway.get_chat_member = AsyncMock(return_value=status)
     repository = MagicMock()
     repository.list_active = AsyncMock(return_value=[target()])
-    service = ForceSubscriptionService(bot=bot, repository=repository)
+    service = ForceSubscriptionService(telegram_gateway=gateway, repository=repository)
     result = await service.check_membership(user_telegram_id=10)
     assert result.is_allowed is False
     assert len(result.missing_targets) == 1
@@ -54,23 +54,11 @@ async def test_unsatisfied_status_blocks_user(status: str) -> None:
 
 @pytest.mark.asyncio
 async def test_api_error_is_treated_as_unsatisfied() -> None:
-    bot = MagicMock()
-    bot.get_chat_member = AsyncMock(side_effect=TelegramBadRequest(method=MagicMock(), message="chat not found"))
+    gateway = MagicMock()
+    gateway.get_chat_member = AsyncMock(side_effect=TelegramGatewayError("chat not found"))
     repository = MagicMock()
     repository.list_active = AsyncMock(return_value=[target()])
-    service = ForceSubscriptionService(bot=bot, repository=repository)
-    result = await service.check_membership(user_telegram_id=10)
-    assert result.is_allowed is False
-    assert result.targets[0].status is MembershipStatus.ERROR
-
-
-@pytest.mark.asyncio
-async def test_forbidden_error_is_treated_as_unsatisfied() -> None:
-    bot = MagicMock()
-    bot.get_chat_member = AsyncMock(side_effect=TelegramForbiddenError(method=MagicMock(), message="forbidden"))
-    repository = MagicMock()
-    repository.list_active = AsyncMock(return_value=[target()])
-    service = ForceSubscriptionService(bot=bot, repository=repository)
+    service = ForceSubscriptionService(telegram_gateway=gateway, repository=repository)
     result = await service.check_membership(user_telegram_id=10)
     assert result.is_allowed is False
     assert result.targets[0].status is MembershipStatus.ERROR
@@ -78,27 +66,35 @@ async def test_forbidden_error_is_treated_as_unsatisfied() -> None:
 
 @pytest.mark.asyncio
 async def test_multiple_targets_require_all_memberships() -> None:
-    bot = MagicMock()
-    bot.get_chat_member = AsyncMock(side_effect=[MagicMock(status="member"), MagicMock(status="left")])
+    gateway = MagicMock()
+    gateway.get_chat_member = AsyncMock(side_effect=["member", "left"])
     first = target(-1001)
     second = target(-1002)
     repository = MagicMock()
     repository.list_active = AsyncMock(return_value=[first, second])
-    service = ForceSubscriptionService(bot=bot, repository=repository)
+    service = ForceSubscriptionService(telegram_gateway=gateway, repository=repository)
     result = await service.check_membership(user_telegram_id=10)
     assert result.is_allowed is False
     assert result.missing_targets == (second,)
-    assert bot.get_chat_member.await_count == 2
+    assert gateway.get_chat_member.await_count == 2
 
 
 @pytest.mark.asyncio
 async def test_resolve_public_channel_and_add_target() -> None:
-    bot = MagicMock()
-    bot.get_chat = AsyncMock(return_value=MagicMock(id=-1001, type="channel", title="News", username="news"))
+    gateway = MagicMock()
+    gateway.get_chat = AsyncMock(
+        return_value=MagicMock(
+            id=-1001,
+            type="channel",
+            title="News",
+            username="news",
+            invite_link=None,
+        )
+    )
     repository = MagicMock()
     repository.get = AsyncMock(return_value=None)
     repository.create = AsyncMock(side_effect=lambda value: value)
-    service = ForceSubscriptionService(bot=bot, repository=repository)
+    service = ForceSubscriptionService(telegram_gateway=gateway, repository=repository)
 
     resolved = await service.resolve_target("@news")
     created = await service.add_target(resolved)
@@ -111,10 +107,18 @@ async def test_resolve_public_channel_and_add_target() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_rejects_private_target_without_join_link() -> None:
-    bot = MagicMock()
-    bot.get_chat = AsyncMock(return_value=MagicMock(id=-1001, type="supergroup", title="Private", username=None, invite_link=None))
+    gateway = MagicMock()
+    gateway.get_chat = AsyncMock(
+        return_value=MagicMock(
+            id=-1001,
+            type="supergroup",
+            title="Private",
+            username=None,
+            invite_link=None,
+        )
+    )
     repository = MagicMock()
-    service = ForceSubscriptionService(bot=bot, repository=repository)
+    service = ForceSubscriptionService(telegram_gateway=gateway, repository=repository)
 
     with pytest.raises(ValueError, match="لینک"):
         await service.resolve_target("-1001")
@@ -122,10 +126,12 @@ async def test_resolve_rejects_private_target_without_join_link() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_rejects_non_channel_or_group() -> None:
-    bot = MagicMock()
-    bot.get_chat = AsyncMock(return_value=MagicMock(id=10, type="private", title="User", username="user"))
+    gateway = MagicMock()
+    gateway.get_chat = AsyncMock(
+        return_value=MagicMock(id=10, type="private", title="User", username="user")
+    )
     repository = MagicMock()
-    service = ForceSubscriptionService(bot=bot, repository=repository)
+    service = ForceSubscriptionService(telegram_gateway=gateway, repository=repository)
 
     with pytest.raises(ValueError, match="فقط کانال"):
         await service.resolve_target("@user")
@@ -135,7 +141,7 @@ async def test_resolve_rejects_non_channel_or_group() -> None:
 async def test_add_rejects_duplicate_target() -> None:
     repository = MagicMock()
     repository.get = AsyncMock(return_value=target())
-    service = ForceSubscriptionService(bot=MagicMock(), repository=repository)
+    service = ForceSubscriptionService(telegram_gateway=MagicMock(), repository=repository)
 
     with pytest.raises(ValueError, match="قبلاً"):
         await service.add_target(target())
@@ -148,7 +154,7 @@ async def test_toggle_target_changes_active_state() -> None:
     repository = MagicMock()
     repository.get = AsyncMock(return_value=existing)
     repository.update = AsyncMock(side_effect=lambda value: value)
-    service = ForceSubscriptionService(bot=MagicMock(), repository=repository)
+    service = ForceSubscriptionService(telegram_gateway=MagicMock(), repository=repository)
 
     result = await service.toggle_target(existing.chat_id)
 
@@ -161,7 +167,7 @@ async def test_toggle_target_changes_active_state() -> None:
 async def test_delete_target_delegates_to_repository() -> None:
     repository = MagicMock()
     repository.delete = AsyncMock(return_value=True)
-    service = ForceSubscriptionService(bot=MagicMock(), repository=repository)
+    service = ForceSubscriptionService(telegram_gateway=MagicMock(), repository=repository)
 
     assert await service.delete_target(-1001) is True
     repository.delete.assert_awaited_once_with(-1001)

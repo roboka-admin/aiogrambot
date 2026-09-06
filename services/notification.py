@@ -1,14 +1,13 @@
 import logging
 
-from aiogram import Bot
-from aiogram.exceptions import TelegramAPIError
+from services.telegram import TelegramGateway, TelegramGatewayError
 
 
 class NotificationService:
-    """Centralized Telegram user notifications."""
+    """Centralized user notification policy, independent of Telegram/aiogram."""
 
-    def __init__(self, bot: Bot) -> None:
-        self._bot = bot
+    def __init__(self, telegram_gateway: TelegramGateway) -> None:
+        self._telegram_gateway = telegram_gateway
         self._logger = logging.getLogger(__name__)
 
     async def warning_added(
@@ -67,8 +66,8 @@ class NotificationService:
 
     async def _send(self, telegram_id: int, text: str) -> None:
         try:
-            await self._bot.send_message(telegram_id, text)
-        except TelegramAPIError:
+            await self._telegram_gateway.send_message(telegram_id, text)
+        except TelegramGatewayError:
             self._logger.warning(
                 "Could not deliver notification to user %s",
                 telegram_id,

@@ -48,6 +48,7 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
         patch("middlewares.services.ForceSubscriptionRepository") as force_subscription_repository,
         patch("middlewares.services.ForceSubscriptionEventRepository") as force_subscription_event_repository,
         patch("middlewares.services.AdminRepository") as admin_repository,
+        patch("middlewares.services.AiogramTelegramGateway") as telegram_gateway,
         patch("middlewares.services.RegisterService") as register_service,
         patch("middlewares.services.UserService") as user_service,
         patch("middlewares.services.SupportService") as support_service,
@@ -69,6 +70,7 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     assert session.begin.call_count == 1
     assert database.transaction.exited_with is None
 
+    telegram_gateway.assert_called_once_with(bot)
     user_repository.assert_called_once_with(session)
     support_repository.assert_called_once_with(session)
     antispam_repository.assert_called_once_with(session)
@@ -91,20 +93,24 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     bot_settings_service.assert_called_once_with(
         bot_settings_repository=bot_settings_repository.return_value,
     )
+
     broadcast_service.assert_called_once()
-    broadcast_service_kwargs = broadcast_service.call_args.kwargs
-    assert broadcast_service_kwargs["bot"] is bot
-    assert callable(broadcast_service_kwargs["repository_factory"])
-    assert broadcast_service_kwargs["broadcast_lock"] is middleware._broadcast_lock
+    broadcast_kwargs = broadcast_service.call_args.kwargs
+    assert broadcast_kwargs["telegram_gateway"] is telegram_gateway.return_value
+    assert callable(broadcast_kwargs["repository_factory"])
+    assert broadcast_kwargs["broadcast_lock"] is middleware._broadcast_lock
+
     antispam_service.assert_called_once_with(
         antispam_repository=antispam_repository.return_value,
     )
     force_subscription_service.assert_called_once_with(
-        bot=bot,
+        telegram_gateway=telegram_gateway.return_value,
         repository=force_subscription_repository.return_value,
         event_repository=force_subscription_event_repository.return_value,
     )
-    notification_service.assert_called_once_with(bot=bot)
+    notification_service.assert_called_once_with(
+        telegram_gateway=telegram_gateway.return_value
+    )
 
     assert data["register_service"] is register_service.return_value
     assert data["user_service"] is user_service.return_value
@@ -139,6 +145,7 @@ async def test_services_middleware_passes_handler_exception_through_transaction(
         patch("middlewares.services.ForceSubscriptionRepository"),
         patch("middlewares.services.ForceSubscriptionEventRepository"),
         patch("middlewares.services.AdminRepository"),
+        patch("middlewares.services.AiogramTelegramGateway"),
         patch("middlewares.services.RegisterService"),
         patch("middlewares.services.UserService"),
         patch("middlewares.services.SupportService"),
