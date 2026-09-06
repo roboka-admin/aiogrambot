@@ -1,4 +1,5 @@
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -18,13 +19,35 @@ from keyboards.admin_management import (
     managed_permission_keyboard,
     permission_selection_keyboard,
 )
-from models.admin import AdminRole
+from models.admin import Admin, AdminRole
 from services.admin import AdminService
 from states.admin import AdminManagementStates
 
 router = Router()
 router.message.filter(AdminPermissionFilter("admins"))
 router.callback_query.filter(AdminPermissionFilter("admins"))
+
+
+async def _admin_display_names(callback: CallbackQuery, admins: list[Admin]) -> dict[int, str]:
+    """Resolve current Telegram display names for the admin list."""
+    names: dict[int, str] = {}
+    for admin in admins:
+        try:
+            chat = await callback.bot.get_chat(admin.telegram_id)
+        except TelegramBadRequest:
+            continue
+
+        name = " ".join(part for part in (chat.first_name, chat.last_name) if part).strip()
+        if name:
+            names[admin.telegram_id] = name
+        elif chat.username:
+            names[admin.telegram_id] = f"@{chat.username}"
+
+    return names
+
+
+async def _admin_list_keyboard(callback: CallbackQuery, admins: list[Admin]):
+    return admins_keyboard(admins, await _admin_display_names(callback, admins))
 
 
 async def _show_management(message: Message, admin_service: AdminService) -> None:
@@ -57,12 +80,14 @@ async def admin_management_back_handler(
 
 @router.callback_query(AdminManagementCallback.filter(F.action == "list"))
 async def admin_list_handler(callback: CallbackQuery, admin_service: AdminService) -> None:
-    admins = await admin_service.list_admins()
+    admins = list(await admin_service.list_admins())
     if not admins:
         text = "👥 هیچ ادمینی ثبت نشده است."
     else:
         text = "👥 فهرست ادمین‌ها\n\nبرای مشاهده جزئیات، ادمین موردنظر را انتخاب کنید."
-    await callback.message.edit_text(text, reply_markup=admins_keyboard(admins))
+    await callback.message.edit_text(
+        text, reply_markup=await _admin_list_keyboard(callback, admins)
+    )
     await callback.answer()
 
 
@@ -323,5 +348,8 @@ async def admin_delete_handler(
         show_alert=not removed,
     )
     if removed:
-        admins = await admin_service.list_admins()
-        await callback.message.edit_text("👥 فهرست ادمین‌ها", reply_markup=admins_keyboard(admins))
+        admins = list(await admin_service.list_admins())
+        await callback.message.edit_text(
+            "👥 فهرست ادمین‌ها",
+            reply_markup=await _admin_list_keyboard(callback, admins),
+        )
