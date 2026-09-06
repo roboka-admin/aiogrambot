@@ -17,15 +17,15 @@ def target(chat_id: int = -1001) -> ForceSubscriptionTarget:
 
 @pytest.mark.asyncio
 async def test_successful_membership_check_can_be_recorded() -> None:
-    bot = MagicMock()
-    bot.get_chat_member = AsyncMock(return_value=MagicMock(status="member"))
+    telegram_gateway = MagicMock()
+    telegram_gateway.get_chat_member = AsyncMock(return_value="member")
     repository = MagicMock()
     repository.list_active = AsyncMock(return_value=[target()])
     event_repository = MagicMock()
     event_repository.create = AsyncMock()
 
     service = ForceSubscriptionService(
-        bot=bot,
+        telegram_gateway=telegram_gateway,
         repository=repository,
         event_repository=event_repository,
     )
@@ -45,15 +45,15 @@ async def test_successful_membership_check_can_be_recorded() -> None:
 
 @pytest.mark.asyncio
 async def test_unsatisfied_membership_is_not_recorded() -> None:
-    bot = MagicMock()
-    bot.get_chat_member = AsyncMock(return_value=MagicMock(status="left"))
+    telegram_gateway = MagicMock()
+    telegram_gateway.get_chat_member = AsyncMock(return_value="left")
     repository = MagicMock()
     repository.list_active = AsyncMock(return_value=[target()])
     event_repository = MagicMock()
     event_repository.create = AsyncMock()
 
     service = ForceSubscriptionService(
-        bot=bot,
+        telegram_gateway=telegram_gateway,
         repository=repository,
         event_repository=event_repository,
     )
@@ -70,14 +70,14 @@ async def test_unsatisfied_membership_is_not_recorded() -> None:
 
 @pytest.mark.asyncio
 async def test_membership_statistics_use_expected_period_boundaries() -> None:
-    bot = MagicMock()
+    telegram_gateway = MagicMock()
     repository = MagicMock()
     event_repository = MagicMock()
     event_repository.count_total = AsyncMock(return_value=100)
     event_repository.count_since = AsyncMock(side_effect=[10, 40, 80])
 
     service = ForceSubscriptionService(
-        bot=bot,
+        telegram_gateway=telegram_gateway,
         repository=repository,
         event_repository=event_repository,
     )
