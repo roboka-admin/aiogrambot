@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 
 from core.admin_permissions import ADMIN_PERMISSION_REGISTRY
 from models.admin import Admin, AdminPermission, AdminRole, AdminStatus
@@ -11,7 +11,7 @@ class AdminService:
     def __init__(self, *, admin_repository: IAdminRepository) -> None:
         self._admin_repository = admin_repository
 
-    async def bootstrap(self, owner_telegram_ids: Sequence[int]) -> None:
+    async def bootstrap(self, owner_telegram_ids: Iterable[int]) -> None:
         """Initialize configured owners and the permission registry at application startup."""
         await self.sync_permission_registry(ADMIN_PERMISSION_REGISTRY)
         for telegram_id in owner_telegram_ids:
