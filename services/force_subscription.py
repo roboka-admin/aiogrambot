@@ -7,7 +7,7 @@ from models.force_subscription import ForceSubscriptionTarget, ForceSubscription
 from models.force_subscription_event import ForceSubscriptionMembershipEvent
 from repositories.interfaces.force_subscription import IForceSubscriptionRepository
 from repositories.interfaces.force_subscription_event import IForceSubscriptionEventRepository
-from services.telegram import TelegramGateway, TelegramGatewayError
+from services.telegram import TelegramGateway, TelegramGatewayError, TelegramRateLimitError
 
 
 class MembershipStatus(str, Enum):
@@ -76,6 +76,8 @@ class ForceSubscriptionService:
 
         try:
             chat = await self._telegram_gateway.get_chat(chat_id=query)
+        except TelegramRateLimitError:
+            raise
         except TelegramGatewayError as exc:
             raise ValueError("کانال یا گروه پیدا نشد یا ربات به آن دسترسی ندارد.") from exc
 
@@ -130,6 +132,8 @@ class ForceSubscriptionService:
                 chat_id=target.chat_id,
                 user_id=user_telegram_id,
             )
+        except TelegramRateLimitError:
+            raise
         except TelegramGatewayError:
             return TargetMembershipResult(target, MembershipStatus.ERROR)
 
