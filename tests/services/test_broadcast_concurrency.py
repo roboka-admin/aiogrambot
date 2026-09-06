@@ -32,7 +32,7 @@ class FakeBroadcastRepository:
         return None
 
 
-class FakeBot:
+class FakeTelegramGateway:
     def __init__(self, events: list[str], first_started: asyncio.Event, release_first: asyncio.Event) -> None:
         self.events = events
         self.first_started = first_started
@@ -61,9 +61,9 @@ async def test_broadcasts_are_serialized_by_shared_lock():
         yield user_repository, broadcast_repository
 
     lock = asyncio.Lock()
-    bot = FakeBot(events, first_started, release_first)
+    telegram_gateway = FakeTelegramGateway(events, first_started, release_first)
     service = BroadcastService(
-        bot=bot,
+        telegram_gateway=telegram_gateway,
         repository_factory=repository_factory,
         broadcast_lock=lock,
     )
@@ -74,13 +74,13 @@ async def test_broadcasts_are_serialized_by_shared_lock():
     second = asyncio.create_task(service.broadcast(from_chat_id=10, message_id=21))
     await asyncio.sleep(0)
 
-    assert bot.calls == 1
+    assert telegram_gateway.calls == 1
     assert events == ["telegram:start:1"]
 
     release_first.set()
     await asyncio.gather(first, second)
 
-    assert bot.calls == 2
+    assert telegram_gateway.calls == 2
     assert events == [
         "telegram:start:1",
         "telegram:end:1",
