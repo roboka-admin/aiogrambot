@@ -3,7 +3,6 @@ from typing import Any, Awaitable, Callable
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
-from config import ADMIN_IDS
 from models.user import User, UserStatus
 from services.user import UserService
 
