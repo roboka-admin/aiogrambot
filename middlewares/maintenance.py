@@ -3,7 +3,7 @@ from typing import Any, Awaitable, Callable
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Update
 
-from config import ADMIN_IDS
+from services.admin import AdminService
 from services.bot_settings import BotSettingsService
 
 
@@ -20,7 +20,11 @@ class MaintenanceMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         user = event.event.from_user if event.event is not None else None
-        if user is None or user.id in ADMIN_IDS:
+        if user is None:
+            return await handler(event, data)
+
+        admin_service: AdminService = data["admin_service"]
+        if await admin_service.is_active_admin(user.id):
             return await handler(event, data)
 
         bot_settings_service: BotSettingsService = data["bot_settings_service"]
