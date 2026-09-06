@@ -3,8 +3,8 @@ from typing import Any, Awaitable, Callable
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Update
 
-from config import ADMIN_IDS
 from keyboards.force_subscription import CHECK_CALLBACK, force_subscription_keyboard
+from services.admin import AdminService
 from services.bot_settings import BotSettingsService
 from services.force_subscription import ForceSubscriptionService
 
@@ -22,7 +22,11 @@ class ForceSubscriptionMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         telegram_user = data.get("event_from_user")
-        if telegram_user is None or telegram_user.id in ADMIN_IDS:
+        if telegram_user is None:
+            return await handler(event, data)
+
+        admin_service: AdminService = data["admin_service"]
+        if await admin_service.is_active_admin(telegram_user.id):
             return await handler(event, data)
 
         callback_query = getattr(event, "callback_query", None)
