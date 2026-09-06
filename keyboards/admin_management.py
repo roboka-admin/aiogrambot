@@ -1,4 +1,4 @@
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Mapping, Sequence
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -29,24 +29,30 @@ def admin_management_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def admins_keyboard(admins: Sequence[Admin]) -> InlineKeyboardMarkup:
+def admins_keyboard(
+    admins: Sequence[Admin], display_names: Mapping[int, str] | None = None
+) -> InlineKeyboardMarkup:
+    display_names = display_names or {}
     rows = []
+    admin_buttons = []
     for admin in admins:
         if admin.role.value == "owner":
-            label = f"👑 {admin.telegram_id}"
+            label = f"👑 {display_names.get(admin.telegram_id, 'ادمین اصلی')}"
         else:
             status = "🟢" if admin.status.value == "active" else "🔴"
-            label = f"{status} {admin.telegram_id}"
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=label,
-                    callback_data=AdminManagementCallback(
-                        action="view", telegram_id=admin.telegram_id
-                    ).pack(),
-                )
-            ]
+            label = f"{status} {display_names.get(admin.telegram_id, 'کاربر')}"
+        admin_buttons.append(
+            InlineKeyboardButton(
+                text=label,
+                callback_data=AdminManagementCallback(
+                    action="view", telegram_id=admin.telegram_id
+                ).pack(),
+            )
         )
+
+    rows.extend(
+        [admin_buttons[index : index + 2] for index in range(0, len(admin_buttons), 2)]
+    )
     rows.append(
         [
             InlineKeyboardButton(
@@ -115,19 +121,19 @@ def permission_selection_keyboard(
     permissions: Sequence[AdminPermission], selected: Collection[str]
 ) -> InlineKeyboardMarkup:
     selected = set(selected)
-    rows = []
+    buttons = []
     for permission in permissions:
         mark = "✅" if permission.key in selected else "⬜"
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=f"{mark} {permission.title}",
-                    callback_data=AdminCreatePermissionCallback(
-                        permission_key=permission.key
-                    ).pack(),
-                )
-            ]
+        buttons.append(
+            InlineKeyboardButton(
+                text=f"{mark} {permission.title}",
+                callback_data=AdminCreatePermissionCallback(
+                    permission_key=permission.key
+                ).pack(),
+            )
         )
+
+    rows = [buttons[index : index + 2] for index in range(0, len(buttons), 2)]
     rows.append(
         [
             InlineKeyboardButton(
@@ -149,20 +155,20 @@ def managed_permission_keyboard(
     selected: Collection[str],
 ) -> InlineKeyboardMarkup:
     selected = set(selected)
-    rows = []
+    buttons = []
     for permission in permissions:
         mark = "✅" if permission.key in selected else "⬜"
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=f"{mark} {permission.title}",
-                    callback_data=AdminPermissionCallback(
-                        telegram_id=telegram_id,
-                        permission_key=permission.key,
-                    ).pack(),
-                )
-            ]
+        buttons.append(
+            InlineKeyboardButton(
+                text=f"{mark} {permission.title}",
+                callback_data=AdminPermissionCallback(
+                    telegram_id=telegram_id,
+                    permission_key=permission.key,
+                ).pack(),
+            )
         )
+
+    rows = [buttons[index : index + 2] for index in range(0, len(buttons), 2)]
     rows.append(
         [
             InlineKeyboardButton(
