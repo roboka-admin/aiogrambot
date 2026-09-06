@@ -29,7 +29,7 @@ router.callback_query.filter(AdminPermissionFilter("admins"))
 
 
 async def _admin_display_names(callback: CallbackQuery, admins: list[Admin]) -> dict[int, str]:
-    """Resolve current Telegram display names for the admin list."""
+    """Resolve current Telegram first names for the admin list."""
     names: dict[int, str] = {}
     for admin in admins:
         try:
@@ -37,11 +37,8 @@ async def _admin_display_names(callback: CallbackQuery, admins: list[Admin]) -> 
         except TelegramBadRequest:
             continue
 
-        name = " ".join(part for part in (chat.first_name, chat.last_name) if part).strip()
-        if name:
-            names[admin.telegram_id] = name
-        elif chat.username:
-            names[admin.telegram_id] = f"@{chat.username}"
+        if chat.first_name:
+            names[admin.telegram_id] = chat.first_name
 
     return names
 
