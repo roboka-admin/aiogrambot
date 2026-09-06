@@ -3,7 +3,8 @@ import logging
 
 from aiogram import Bot, Dispatcher
 
-from config import BOT_TOKEN, DATABASE_URL
+from config import ADMIN_IDS, BOT_TOKEN, DATABASE_URL
+from core.admin_permissions import ADMIN_PERMISSION_REGISTRY
 from core.database import Database
 from handlers.admin import router as admin_router
 from handlers.admin_broadcast import router as admin_broadcast_router
@@ -28,7 +29,17 @@ from middlewares.logging import LoggingMiddleware
 from middlewares.maintenance import MaintenanceMiddleware
 from middlewares.services import ServicesMiddleware
 from middlewares.user import UserMiddleware
+from repositories.admin import AdminRepository
+from services.admin import AdminService
 from services.system import SystemService
+
+
+async def bootstrap_admin_system(database: Database) -> None:
+    """Seed configured owners and synchronize admin capabilities at startup."""
+    async with database.get_session() as session:
+        async with session.begin():
+            admin_service = AdminService(admin_repository=AdminRepository(session))
+            await admin_service.bootstrap(ADMIN_IDS)
 
 
 async def main() -> None:
@@ -45,34 +56,36 @@ async def main() -> None:
     database = Database(database_url=DATABASE_URL)
     system_service = SystemService(database=database)
 
-    dp.update.middleware(LoggingMiddleware(system_service=system_service))
-    dp.update.middleware(ServicesMiddleware(database=database, system_service=system_service))
-    dp.update.middleware(MaintenanceMiddleware())
-    dp.update.middleware(UserMiddleware())
-    dp.update.middleware(ForceSubscriptionMiddleware())
-
-    dp.message.outer_middleware(AntiSpamMiddleware())
-    dp.callback_query.outer_middleware(AntiSpamMiddleware())
-
-    dp.include_router(start_router)
-    dp.include_router(register_router)
-    dp.include_router(profile_router)
-    dp.include_router(support_router)
-    dp.include_router(edit_profile_router)
-    dp.include_router(force_subscription_router)
-    dp.include_router(admin_system_stats_router)
-    dp.include_router(admin_force_subscription_stats_router)
-    dp.include_router(admin_stats_refresh_router)
-    dp.include_router(admin_management_router)
-    dp.include_router(admin_router)
-    dp.include_router(admin_cancel_router)
-    dp.include_router(admin_broadcast_router)
-    dp.include_router(admin_settings_router)
-    dp.include_router(admin_force_subscription_router)
-    dp.include_router(admin_support_settings_router)
-    dp.include_router(admin_support_router)
-
     try:
+        await bootstrap_admin_system(database)
+
+        dp.update.middleware(LoggingMiddleware(system_service=system_service))
+        dp.update.middleware(ServicesMiddleware(database=database, system_service=system_service))
+        dp.update.middleware(MaintenanceMiddleware())
+        dp.update.middleware(UserMiddleware())
+        dp.update.middleware(ForceSubscriptionMiddleware())
+
+        dp.message.outer_middleware(AntiSpamMiddleware())
+        dp.callback_query.outer_middleware(AntiSpamMiddleware())
+
+        dp.include_router(start_router)
+        dp.include_router(register_router)
+        dp.include_router(profile_router)
+        dp.include_router(support_router)
+        dp.include_router(edit_profile_router)
+        dp.include_router(force_subscription_router)
+        dp.include_router(admin_system_stats_router)
+        dp.include_router(admin_force_subscription_stats_router)
+        dp.include_router(admin_stats_refresh_router)
+        dp.include_router(admin_management_router)
+        dp.include_router(admin_router)
+        dp.include_router(admin_cancel_router)
+        dp.include_router(admin_broadcast_router)
+        dp.include_router(admin_settings_router)
+        dp.include_router(admin_force_subscription_router)
+        dp.include_router(admin_support_settings_router)
+        dp.include_router(admin_support_router)
+
         await dp.start_polling(bot)
     finally:
         await database.dispose()
