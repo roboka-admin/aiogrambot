@@ -35,7 +35,7 @@ class FakeBroadcastRepository:
         return self.records[-1] if self.records else None
 
 
-class FakeBot:
+class FakeTelegramGateway:
     def __init__(self, events: list[str]) -> None:
         self.events = events
 
@@ -58,7 +58,7 @@ async def test_broadcast_database_scopes_do_not_wrap_telegram_delivery():
             events.append("db:end")
 
     service = BroadcastService(
-        bot=FakeBot(events),
+        telegram_gateway=FakeTelegramGateway(events),
         repository_factory=repository_factory,
     )
 
