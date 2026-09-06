@@ -4,7 +4,6 @@ import logging
 from aiogram import Bot, Dispatcher
 
 from config import ADMIN_IDS, BOT_TOKEN, DATABASE_URL
-from core.admin_permissions import ADMIN_PERMISSION_REGISTRY
 from core.database import Database
 from handlers.admin import router as admin_router
 from handlers.admin_broadcast import router as admin_broadcast_router
