@@ -9,6 +9,12 @@ from models.bot_settings import BotSettings
 from services.force_subscription import MembershipCheckResult
 
 
+def _admin_service(*, active: bool) -> MagicMock:
+    service = MagicMock()
+    service.is_active_admin = AsyncMock(return_value=active)
+    return service
+
+
 @pytest.mark.asyncio
 async def test_disabled_feature_passes_to_handler() -> None:
     middleware = ForceSubscriptionMiddleware()
@@ -17,6 +23,7 @@ async def test_disabled_feature_passes_to_handler() -> None:
     user = MagicMock(id=10)
     data = {
         "event_from_user": user,
+        "admin_service": _admin_service(active=False),
         "bot_settings_service": MagicMock(
             get_settings=AsyncMock(return_value=BotSettings(force_subscription_enabled=False))
         ),
@@ -31,18 +38,21 @@ async def test_disabled_feature_passes_to_handler() -> None:
 
 
 @pytest.mark.asyncio
-async def test_admin_bypasses_force_subscription() -> None:
+async def test_active_database_admin_bypasses_force_subscription() -> None:
     middleware = ForceSubscriptionMiddleware()
     handler = AsyncMock(return_value="handled")
     event = MagicMock(spec=Update)
-    data = {"event_from_user": MagicMock(id=1)}
+    admin_service = _admin_service(active=True)
+    data = {
+        "event_from_user": MagicMock(id=1),
+        "admin_service": admin_service,
+    }
 
-    with pytest.MonkeyPatch.context() as monkeypatch:
-        monkeypatch.setattr("middlewares.force_subscription.ADMIN_IDS", {1})
-        result = await middleware(handler, event, data)
+    result = await middleware(handler, event, data)
 
     assert result == "handled"
     handler.assert_awaited_once_with(event, data)
+    admin_service.is_active_admin.assert_awaited_once_with(1)
 
 
 @pytest.mark.asyncio
@@ -51,7 +61,10 @@ async def test_membership_check_callback_reaches_dedicated_handler() -> None:
     handler = AsyncMock(return_value="handled")
     event = MagicMock(spec=Update)
     event.callback_query = MagicMock(data=CHECK_CALLBACK)
-    data = {"event_from_user": MagicMock(id=10)}
+    data = {
+        "event_from_user": MagicMock(id=10),
+        "admin_service": _admin_service(active=False),
+    }
 
     result = await middleware(handler, event, data)
 
@@ -75,6 +88,7 @@ async def test_satisfied_user_reaches_handler() -> None:
     )
     data = {
         "event_from_user": user,
+        "admin_service": _admin_service(active=False),
         "bot_settings_service": settings_service,
         "force_subscription_service": force_service,
     }
@@ -103,6 +117,7 @@ async def test_unsatisfied_user_is_blocked_with_subscription_keyboard() -> None:
     force_service.check_membership = AsyncMock(return_value=check_result)
     data = {
         "event_from_user": user,
+        "admin_service": _admin_service(active=False),
         "bot_settings_service": settings_service,
         "force_subscription_service": force_service,
     }
