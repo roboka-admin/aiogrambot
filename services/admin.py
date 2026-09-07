@@ -44,7 +44,7 @@ class AdminService:
 
     @transactional
     async def user_exists(self, telegram_id: int) -> bool:
-        return await self._user_repository.get_by_telegram_id(telegram_id) is not None
+        return await self._user_repository.exists(telegram_id)
 
     @transactional
     async def add_admin(self, telegram_id: int) -> Admin:
@@ -182,7 +182,7 @@ class AdminService:
             raise PermissionError("admin management permission required")
 
     async def _ensure_target_user_exists(self, telegram_id: int) -> None:
-        if await self._user_repository.get_by_telegram_id(telegram_id) is None:
+        if not await self._user_repository.exists(telegram_id):
             raise UserNotFoundError("target user has not started the bot")
 
     async def _validate_assignable_permissions(
