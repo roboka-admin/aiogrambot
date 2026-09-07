@@ -13,6 +13,7 @@ async def test_create_managed_admin_rejects_user_who_has_not_started_bot():
     admin_repository = MagicMock()
     admin_repository.get = AsyncMock(side_effect=[
         Admin(telegram_id=100, role=AdminRole.OWNER),
+        Admin(telegram_id=100, role=AdminRole.OWNER),
         None,
     ])
     user_repository = MagicMock()
@@ -39,6 +40,7 @@ async def test_create_managed_admin_accepts_user_who_has_started_bot():
     target_user = User(telegram_id=200, telegram_name="Target")
     admin_repository = MagicMock()
     admin_repository.get = AsyncMock(side_effect=[
+        Admin(telegram_id=100, role=AdminRole.OWNER),
         Admin(telegram_id=100, role=AdminRole.OWNER),
         None,
     ])
