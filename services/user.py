@@ -2,6 +2,7 @@ from datetime import timedelta
 from math import ceil
 
 from core.timezone import tehran_now
+from core.transaction import NullTransactionManager, TransactionManager, transactional
 from exceptions.user import UserNotFoundError
 from models.user import User, UserStatus
 from repositories.interfaces.user import IUserRepository
@@ -10,9 +11,16 @@ _MAX_WARNINGS = 3
 
 
 class UserService:
-    def __init__(self, *, user_repository: IUserRepository) -> None:
+    def __init__(
+        self,
+        *,
+        user_repository: IUserRepository,
+        transaction_manager: TransactionManager | None = None,
+    ) -> None:
         self._user_repository = user_repository
+        self._transaction_manager = transaction_manager or NullTransactionManager()
 
+    @transactional
     async def get_or_create_telegram_user(
         self,
         *,
@@ -35,15 +43,18 @@ class UserService:
         user.last_seen_at = tehran_now()
         return await self._save(user)
 
+    @transactional
     async def exists(self, telegram_id: int) -> bool:
         return await self._user_repository.exists(telegram_id)
 
+    @transactional
     async def get_user(self, telegram_id: int) -> User:
         user = await self._user_repository.get_by_telegram_id(telegram_id)
         if user is None:
             raise UserNotFoundError()
         return user
 
+    @transactional
     async def get_users_page(
         self, *, page: int, page_size: int
     ) -> tuple[list[User], int, int]:
@@ -56,6 +67,7 @@ class UserService:
         )
         return users, total, page
 
+    @transactional
     async def get_user_counts(self) -> dict[str, int]:
         return {
             "total": await self._user_repository.count(),
@@ -64,14 +76,10 @@ class UserService:
             "blocked": await self._user_repository.count_blocked(),
         }
 
+    @transactional
     async def get_user_statistics(self) -> dict[str, int]:
         now = tehran_now()
-        today_start = now.replace(
-            hour=0,
-            minute=0,
-            second=0,
-            microsecond=0,
-        )
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         seven_days_ago = today_start - timedelta(days=7)
         thirty_days_ago = today_start - timedelta(days=30)
 
@@ -81,64 +89,72 @@ class UserService:
             "unregistered": await self._user_repository.count_unregistered(),
             "blocked": await self._user_repository.count_blocked(),
             "active": await self._user_repository.count_active(),
-            "active_today": await self._user_repository.count_active_today(
-                today_start
-            ),
-            "active_7d": await self._user_repository.count_active_last_7_days(
-                seven_days_ago
-            ),
-            "inactive_30d": await self._user_repository.count_inactive_30_days(
-                thirty_days_ago
-            ),
+            "active_today": await self._user_repository.count_active_today(today_start),
+            "active_7d": await self._user_repository.count_active_last_7_days(seven_days_ago),
+            "inactive_30d": await self._user_repository.count_inactive_30_days(thirty_days_ago),
         }
 
+    @transactional
     async def update_name(self, telegram_id: int, name: str) -> User:
-        user = await self.get_user(telegram_id)
+        user = await self._get_user(telegram_id)
         user.name = name.strip()
         return await self._save(user)
 
+    @transactional
     async def update_age(self, telegram_id: int, age: int) -> User:
-        user = await self.get_user(telegram_id)
+        user = await self._get_user(telegram_id)
         user.age = age
         return await self._save(user)
 
+    @transactional
     async def add_coins(self, telegram_id: int, amount: int = 1) -> User:
         if amount <= 0:
             raise ValueError("Amount must be positive")
-        user = await self.get_user(telegram_id)
+        user = await self._get_user(telegram_id)
         user.coins += amount
         return await self._save(user)
 
+    @transactional
     async def remove_coins(self, telegram_id: int, amount: int = 1) -> User:
         if amount <= 0:
             raise ValueError("Amount must be positive")
-        user = await self.get_user(telegram_id)
+        user = await self._get_user(telegram_id)
         user.coins = max(0, user.coins - amount)
         return await self._save(user)
 
+    @transactional
     async def add_warning(self, telegram_id: int) -> User:
-        user = await self.get_user(telegram_id)
+        user = await self._get_user(telegram_id)
         user.warnings += 1
         if user.warnings >= _MAX_WARNINGS:
             user.status = UserStatus.BLOCKED
         return await self._save(user)
 
+    @transactional
     async def block_user(self, telegram_id: int) -> User:
-        user = await self.get_user(telegram_id)
+        user = await self._get_user(telegram_id)
         user.status = UserStatus.BLOCKED
         return await self._save(user)
 
+    @transactional
     async def unblock_user(self, telegram_id: int) -> User:
-        user = await self.get_user(telegram_id)
+        user = await self._get_user(telegram_id)
         user.status = UserStatus.ACTIVE
         user.warnings = 0
         return await self._save(user)
+
+    async def _get_user(self, telegram_id: int) -> User:
+        user = await self._user_repository.get_by_telegram_id(telegram_id)
+        if user is None:
+            raise UserNotFoundError()
+        return user
 
     async def _save(self, user: User) -> User:
         updated = await self._user_repository.update(user)
         assert updated is not None
         return updated
 
+    @transactional
     async def get_active_telegram_ids(
         self, *, registered_only: bool = False
     ) -> list[int]:
@@ -146,6 +162,7 @@ class UserService:
             registered_only=registered_only
         )
 
+    @transactional
     async def get_blocked_users_page(
         self, *, page: int, page_size: int
     ) -> tuple[list[User], int, int]:
