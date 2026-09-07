@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
-from typing import Protocol
+from functools import wraps
+from typing import Any, Awaitable, Callable, Protocol, TypeVar
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,3 +40,17 @@ class SessionTransactionManager:
 
         async with self._session.begin():
             yield
+
+
+T = TypeVar("T")
+
+
+def transactional(method: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
+    """Wrap one service operation in its application transaction boundary."""
+
+    @wraps(method)
+    async def wrapper(self: Any, *args: Any, **kwargs: Any) -> T:
+        async with self._transaction_manager.transaction():
+            return await method(self, *args, **kwargs)
+
+    return wrapper
