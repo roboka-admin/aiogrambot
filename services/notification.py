@@ -64,6 +64,12 @@ class NotificationService:
             f"موجودی فعلی: {balance} سکه",
         )
 
+    async def admin_added(self, telegram_id: int) -> None:
+        await self._send(
+            telegram_id,
+            "🛡 حساب شما به عنوان ادمین ربات فعال شد.",
+        )
+
     async def _send(self, telegram_id: int, text: str) -> None:
         try:
             await self._telegram_gateway.send_message(telegram_id, text)
