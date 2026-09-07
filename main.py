@@ -30,6 +30,7 @@ from middlewares.maintenance import MaintenanceMiddleware
 from middlewares.services import ServicesMiddleware
 from middlewares.user import UserMiddleware
 from repositories.admin import AdminRepository
+from repositories.user import UserRepository
 from services.admin import AdminService
 from services.system import SystemService
 
@@ -40,6 +41,7 @@ async def bootstrap_admin_system(database: Database) -> None:
         transaction_manager = SessionTransactionManager(session)
         admin_service = AdminService(
             admin_repository=AdminRepository(session),
+            user_repository=UserRepository(session),
             transaction_manager=transaction_manager,
         )
         await admin_service.bootstrap(ADMIN_IDS)
