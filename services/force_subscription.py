@@ -3,6 +3,7 @@ from datetime import timedelta
 from enum import Enum
 
 from core.timezone import tehran_now
+from core.transaction import NullTransactionManager, TransactionManager, transactional
 from models.force_subscription import ForceSubscriptionTarget, ForceSubscriptionTargetType
 from models.force_subscription_event import ForceSubscriptionMembershipEvent
 from repositories.interfaces.force_subscription import IForceSubscriptionRepository
@@ -53,17 +54,22 @@ class ForceSubscriptionService:
         telegram_gateway: TelegramGateway,
         repository: IForceSubscriptionRepository,
         event_repository: IForceSubscriptionEventRepository | None = None,
+        transaction_manager: TransactionManager | None = None,
     ) -> None:
         self._telegram_gateway = telegram_gateway
         self._repository = repository
         self._event_repository = event_repository
+        self._transaction_manager = transaction_manager or NullTransactionManager()
 
+    @transactional
     async def get_active_targets(self) -> list[ForceSubscriptionTarget]:
         return await self._repository.list_active()
 
+    @transactional
     async def list_all_targets(self) -> list[ForceSubscriptionTarget]:
         return await self._repository.list_all()
 
+    @transactional
     async def get_target(self, chat_id: int) -> ForceSubscriptionTarget | None:
         return await self._repository.get(chat_id)
 
@@ -104,15 +110,18 @@ class ForceSubscriptionService:
             updated_at=now,
         )
 
+    @transactional
     async def add_target(self, target: ForceSubscriptionTarget) -> ForceSubscriptionTarget:
         existing = await self._repository.get(target.chat_id)
         if existing is not None:
             raise ValueError("این کانال یا گروه قبلاً اضافه شده است.")
         return await self._repository.create(target)
 
+    @transactional
     async def delete_target(self, chat_id: int) -> bool:
         return await self._repository.delete(chat_id)
 
+    @transactional
     async def toggle_target(self, chat_id: int) -> ForceSubscriptionTarget | None:
         target = await self._repository.get(chat_id)
         if target is None:
@@ -145,6 +154,9 @@ class ForceSubscriptionService:
         return TargetMembershipResult(target, membership_status)
 
     async def check_membership(self, *, user_telegram_id: int) -> MembershipCheckResult:
+        # get_active_targets owns and closes its DB transaction before any
+        # Telegram API request is made. Membership checks can therefore be
+        # slow without holding a database transaction open.
         targets = await self.get_active_targets()
         if not targets:
             return MembershipCheckResult(True, ())
@@ -164,6 +176,7 @@ class ForceSubscriptionService:
             targets=results_tuple,
         )
 
+    @transactional
     async def record_successful_membership_check(
         self,
         *,
@@ -181,6 +194,7 @@ class ForceSubscriptionService:
                 )
             )
 
+    @transactional
     async def get_membership_statistics(self) -> dict[str, int]:
         if self._event_repository is None:
             return {"total": 0, "today": 0, "last_7_days": 0, "last_30_days": 0}
@@ -193,6 +207,7 @@ class ForceSubscriptionService:
             "last_30_days": await self._event_repository.count_since(today - timedelta(days=30)),
         }
 
+    @transactional
     async def get_target_membership_statistics(
         self, target_chat_id: int
     ) -> dict[str, int]:
