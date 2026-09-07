@@ -100,6 +100,7 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     )
     admin_service.assert_called_once_with(
         admin_repository=admin_repository.return_value,
+        user_repository=user_repository.return_value,
         transaction_manager=transaction_manager,
     )
 
