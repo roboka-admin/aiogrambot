@@ -7,22 +7,9 @@ from aiogram import Bot
 from middlewares.services import ServicesMiddleware
 
 
-class TransactionContext:
-    def __init__(self):
-        self.exited_with = None
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        self.exited_with = exc_type
-        return False
-
-
 class FakeDatabase:
     def __init__(self, session):
         self.session = session
-        self.transaction = TransactionContext()
 
     @asynccontextmanager
     async def get_session(self):
@@ -33,7 +20,6 @@ class FakeDatabase:
 async def test_services_middleware_creates_and_injects_request_scoped_dependencies():
     session = MagicMock()
     database = FakeDatabase(session)
-    session.begin.return_value = database.transaction
     system_service = MagicMock()
     bot = Bot("42:TEST")
     handler = AsyncMock(return_value="handled")
@@ -59,16 +45,12 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
         patch("middlewares.services.NotificationService") as notification_service,
         patch("middlewares.services.AdminService") as admin_service,
     ):
-        middleware = ServicesMiddleware(
-            database=database,
-            system_service=system_service,
-        )
-
+        middleware = ServicesMiddleware(database=database, system_service=system_service)
         result = await middleware(handler, MagicMock(), data)
 
     assert result == "handled"
-    assert session.begin.call_count == 1
-    assert database.transaction.exited_with is None
+    session.begin.assert_not_called()
+    transaction_manager = register_service.call_args.kwargs["transaction_manager"]
 
     telegram_gateway.assert_called_once_with(bot)
     user_repository.assert_called_once_with(session)
@@ -79,19 +61,22 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     force_subscription_event_repository.assert_called_once_with(session)
     admin_repository.assert_called_once_with(session)
     broadcast_repository.assert_not_called()
-    admin_service.assert_called_once_with(admin_repository=admin_repository.return_value)
 
     register_service.assert_called_once_with(
         user_repository=user_repository.return_value,
+        transaction_manager=transaction_manager,
     )
     user_service.assert_called_once_with(
         user_repository=user_repository.return_value,
+        transaction_manager=transaction_manager,
     )
     support_service.assert_called_once_with(
         support_repository=support_repository.return_value,
+        transaction_manager=transaction_manager,
     )
     bot_settings_service.assert_called_once_with(
         bot_settings_repository=bot_settings_repository.return_value,
+        transaction_manager=transaction_manager,
     )
 
     broadcast_service.assert_called_once()
@@ -102,14 +87,20 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
 
     antispam_service.assert_called_once_with(
         antispam_repository=antispam_repository.return_value,
+        transaction_manager=transaction_manager,
     )
     force_subscription_service.assert_called_once_with(
         telegram_gateway=telegram_gateway.return_value,
         repository=force_subscription_repository.return_value,
         event_repository=force_subscription_event_repository.return_value,
+        transaction_manager=transaction_manager,
     )
     notification_service.assert_called_once_with(
         telegram_gateway=telegram_gateway.return_value
+    )
+    admin_service.assert_called_once_with(
+        admin_repository=admin_repository.return_value,
+        transaction_manager=transaction_manager,
     )
 
     assert data["register_service"] is register_service.return_value
@@ -126,10 +117,9 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
 
 
 @pytest.mark.asyncio
-async def test_services_middleware_passes_handler_exception_through_transaction():
+async def test_services_middleware_does_not_create_transaction_for_handler():
     session = MagicMock()
     database = FakeDatabase(session)
-    session.begin.return_value = database.transaction
     system_service = MagicMock()
     bot = Bot("42:TEST")
 
@@ -156,12 +146,8 @@ async def test_services_middleware_passes_handler_exception_through_transaction(
         patch("middlewares.services.NotificationService"),
         patch("middlewares.services.AdminService"),
     ):
-        middleware = ServicesMiddleware(
-            database=database,
-            system_service=system_service,
-        )
+        middleware = ServicesMiddleware(database=database, system_service=system_service)
         with pytest.raises(RuntimeError, match="handler failed"):
             await middleware(handler, MagicMock(), {"bot": bot})
 
-    assert session.begin.call_count == 1
-    assert database.transaction.exited_with is RuntimeError
+    session.begin.assert_not_called()
