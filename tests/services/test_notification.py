@@ -33,6 +33,18 @@ async def test_block_notification_is_sent():
 
 
 @pytest.mark.asyncio
+async def test_admin_added_notification_is_sent():
+    gateway = FakeTelegramGateway()
+    service = NotificationService(telegram_gateway=gateway)
+
+    await service.admin_added(200)
+
+    assert gateway.messages == [
+        (200, "🛡 حساب شما به عنوان ادمین ربات فعال شد."),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_notification_delivery_error_does_not_escape():
     gateway = FakeTelegramGateway(error=TelegramGatewayError("send failed"))
     service = NotificationService(telegram_gateway=gateway)
