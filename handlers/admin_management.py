@@ -11,6 +11,7 @@ from callbacks.admin import (
     AdminPermissionCallback,
 )
 from core.admin_permissions import ADMIN_PERMISSION_REGISTRY
+from exceptions.user import UserNotFoundError
 from filters.admin import AdminPermissionFilter
 from keyboards.admin_management import (
     admin_detail_keyboard,
@@ -21,6 +22,7 @@ from keyboards.admin_management import (
 )
 from models.admin import Admin, AdminRole
 from services.admin import AdminService
+from services.notification import NotificationService
 from states.admin import AdminManagementStates
 
 router = Router()
@@ -202,6 +204,11 @@ async def admin_create_id_handler(
     if telegram_id <= 0:
         await message.answer("❌ شناسه باید بزرگ‌تر از صفر باشد.")
         return
+    if not await admin_service.user_exists(telegram_id):
+        await message.answer(
+            "❌ این کاربر هنوز ربات را شروع نکرده است. ابتدا ربات را برای او ارسال کنید تا /start کند."
+        )
+        return
     if await admin_service.get_admin(telegram_id) is not None:
         await message.answer("❌ این کاربر از قبل ادمین است.")
         return
@@ -258,7 +265,10 @@ async def admin_permission_toggle_handler(
 
 @router.callback_query(AdminCreateConfirmCallback.filter())
 async def admin_create_confirm_handler(
-    callback: CallbackQuery, state: FSMContext, admin_service: AdminService
+    callback: CallbackQuery,
+    state: FSMContext,
+    admin_service: AdminService,
+    notification_service: NotificationService,
 ) -> None:
     data = await state.get_data()
     if await state.get_state() != AdminManagementStates.waiting_for_permission_selection:
@@ -271,10 +281,17 @@ async def admin_create_confirm_handler(
             telegram_id=int(data["admin_id"]),
             permission_keys=set(data.get("permission_keys", [])),
         )
+    except UserNotFoundError:
+        await callback.answer(
+            "❌ این کاربر هنوز ربات را شروع نکرده است. ابتدا ربات را برای او ارسال کنید تا /start کند.",
+            show_alert=True,
+        )
+        return
     except (PermissionError, ValueError) as exc:
         await callback.answer(str(exc), show_alert=True)
         return
 
+    await notification_service.admin_added(admin.telegram_id)
     await state.clear()
     await callback.message.edit_text(
         f"✅ ادمین {admin.telegram_id} با موفقیت اضافه شد.",
