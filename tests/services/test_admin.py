@@ -15,7 +15,8 @@ async def test_bootstrap_syncs_permission_registry_and_seeds_configured_owners()
     repository.create = AsyncMock(
         side_effect=lambda admin: admin,
     )
-    service = AdminService(admin_repository=repository)
+    user_repository = MagicMock()
+    service = AdminService(admin_repository=repository, user_repository=user_repository)
 
     await service.bootstrap((101, 202))
 
@@ -34,7 +35,8 @@ async def test_bootstrap_does_not_replace_existing_database_admin():
     repository.sync_permissions = AsyncMock()
     repository.get = AsyncMock(return_value=existing_admin)
     repository.create = AsyncMock()
-    service = AdminService(admin_repository=repository)
+    user_repository = MagicMock()
+    service = AdminService(admin_repository=repository, user_repository=user_repository)
 
     await service.bootstrap((101,))
 
