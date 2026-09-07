@@ -1,62 +1,84 @@
 from core.timezone import tehran_now
+from core.transaction import NullTransactionManager, TransactionManager, transactional
 from models.bot_settings import BotSettings
 from repositories.interfaces.bot_settings import IBotSettingsRepository
 
 
 class BotSettingsService:
-    def __init__(self, *, bot_settings_repository: IBotSettingsRepository) -> None:
+    def __init__(
+        self,
+        *,
+        bot_settings_repository: IBotSettingsRepository,
+        transaction_manager: TransactionManager | None = None,
+    ) -> None:
         self._bot_settings_repository = bot_settings_repository
+        self._transaction_manager = transaction_manager or NullTransactionManager()
 
+    @transactional
     async def get_settings(self) -> BotSettings:
         settings = await self._bot_settings_repository.get()
         if settings is not None:
             return settings
         return await self._bot_settings_repository.create(BotSettings())
 
+    @transactional
     async def set_bot_enabled(self, enabled: bool) -> BotSettings:
-        settings = await self.get_settings()
+        settings = await self._get_settings()
         settings.bot_enabled = enabled
         settings.updated_at = tehran_now()
         return await self._bot_settings_repository.update(settings)
 
+    @transactional
     async def set_maintenance_mode(self, enabled: bool) -> BotSettings:
-        settings = await self.get_settings()
+        settings = await self._get_settings()
         settings.maintenance_mode = enabled
         settings.updated_at = tehran_now()
         return await self._bot_settings_repository.update(settings)
 
+    @transactional
     async def set_antispam_enabled(self, enabled: bool) -> BotSettings:
-        settings = await self.get_settings()
+        settings = await self._get_settings()
         settings.antispam_enabled = enabled
         settings.updated_at = tehran_now()
         return await self._bot_settings_repository.update(settings)
 
+    @transactional
     async def set_force_subscription_enabled(self, enabled: bool) -> BotSettings:
-        settings = await self.get_settings()
+        settings = await self._get_settings()
         settings.force_subscription_enabled = enabled
         settings.updated_at = tehran_now()
         return await self._bot_settings_repository.update(settings)
 
+    @transactional
     async def toggle_bot(self) -> BotSettings:
-        settings = await self.get_settings()
+        settings = await self._get_settings()
         settings.bot_enabled = not settings.bot_enabled
         settings.updated_at = tehran_now()
         return await self._bot_settings_repository.update(settings)
 
+    @transactional
     async def toggle_maintenance(self) -> BotSettings:
-        settings = await self.get_settings()
+        settings = await self._get_settings()
         settings.maintenance_mode = not settings.maintenance_mode
         settings.updated_at = tehran_now()
         return await self._bot_settings_repository.update(settings)
 
+    @transactional
     async def toggle_antispam(self) -> BotSettings:
-        settings = await self.get_settings()
+        settings = await self._get_settings()
         settings.antispam_enabled = not settings.antispam_enabled
         settings.updated_at = tehran_now()
         return await self._bot_settings_repository.update(settings)
 
+    @transactional
     async def toggle_force_subscription(self) -> BotSettings:
-        settings = await self.get_settings()
+        settings = await self._get_settings()
         settings.force_subscription_enabled = not settings.force_subscription_enabled
         settings.updated_at = tehran_now()
         return await self._bot_settings_repository.update(settings)
+
+    async def _get_settings(self) -> BotSettings:
+        settings = await self._bot_settings_repository.get()
+        if settings is not None:
+            return settings
+        return await self._bot_settings_repository.create(BotSettings())
