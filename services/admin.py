@@ -2,8 +2,10 @@ from collections.abc import Iterable, Sequence
 
 from core.admin_permissions import ADMIN_PERMISSION_REGISTRY
 from core.transaction import NullTransactionManager, TransactionManager, transactional
+from exceptions.user import UserNotFoundError
 from models.admin import Admin, AdminPermission, AdminRole, AdminStatus
 from repositories.interfaces.admin import IAdminRepository
+from repositories.interfaces.user import IUserRepository
 
 
 class AdminService:
@@ -13,9 +15,11 @@ class AdminService:
         self,
         *,
         admin_repository: IAdminRepository,
+        user_repository: IUserRepository,
         transaction_manager: TransactionManager | None = None,
     ) -> None:
         self._admin_repository = admin_repository
+        self._user_repository = user_repository
         self._transaction_manager = transaction_manager or NullTransactionManager()
 
     @transactional
@@ -39,6 +43,10 @@ class AdminService:
         return admin is not None and admin.status is AdminStatus.ACTIVE
 
     @transactional
+    async def user_exists(self, telegram_id: int) -> bool:
+        return await self._user_repository.get_by_telegram_id(telegram_id) is not None
+
+    @transactional
     async def add_admin(self, telegram_id: int) -> Admin:
         existing = await self._admin_repository.get(telegram_id)
         if existing is not None:
@@ -55,6 +63,7 @@ class AdminService:
     ) -> Admin:
         await self._ensure_can_manage(actor_telegram_id)
         await self._validate_assignable_permissions(actor_telegram_id, permission_keys)
+        await self._ensure_target_user_exists(telegram_id)
 
         if await self._admin_repository.get(telegram_id) is not None:
             raise ValueError("admin already exists")
@@ -171,6 +180,10 @@ class AdminService:
     async def _ensure_can_manage(self, actor_telegram_id: int) -> None:
         if not await self.has_permission(actor_telegram_id, "admins"):
             raise PermissionError("admin management permission required")
+
+    async def _ensure_target_user_exists(self, telegram_id: int) -> None:
+        if await self._user_repository.get_by_telegram_id(telegram_id) is None:
+            raise UserNotFoundError("target user has not started the bot")
 
     async def _validate_assignable_permissions(
         self, actor_telegram_id: int, permission_keys: set[str]
