@@ -7,6 +7,7 @@ from aiogram.types import TelegramObject
 
 from core.database import Database
 from core.telegram import AiogramTelegramGateway
+from core.transaction import SessionTransactionManager
 from repositories.admin import AdminRepository
 from repositories.antispam import AntiSpamRepository
 from repositories.bot_settings import BotSettingsRepository
@@ -28,7 +29,7 @@ from services.user import UserService
 
 
 class ServicesMiddleware(BaseMiddleware):
-    """Create request-scoped repository and services."""
+    """Create request-scoped repository and service dependencies."""
 
     def __init__(self, *, database: Database, system_service: SystemService) -> None:
         self._database = database
@@ -42,54 +43,71 @@ class ServicesMiddleware(BaseMiddleware):
         data: dict[str, Any],
     ) -> Any:
         async with self._database.get_session() as session:
-            async with session.begin():
-                user_repository = UserRepository(session)
-                support_repository = SupportRepository(session)
-                antispam_repository = AntiSpamRepository(session)
-                bot_settings_repository = BotSettingsRepository(session)
-                force_subscription_repository = ForceSubscriptionRepository(session)
-                force_subscription_event_repository = ForceSubscriptionEventRepository(session)
-                admin_repository = AdminRepository(session)
-                telegram_gateway = AiogramTelegramGateway(data["bot"])
+            transaction_manager = SessionTransactionManager(session)
+            user_repository = UserRepository(session)
+            support_repository = SupportRepository(session)
+            antispam_repository = AntiSpamRepository(session)
+            bot_settings_repository = BotSettingsRepository(session)
+            force_subscription_repository = ForceSubscriptionRepository(session)
+            force_subscription_event_repository = ForceSubscriptionEventRepository(session)
+            admin_repository = AdminRepository(session)
+            telegram_gateway = AiogramTelegramGateway(data["bot"])
 
-                @asynccontextmanager
-                async def broadcast_repository_scope():
-                    async with self._database.get_session() as broadcast_session:
-                        async with broadcast_session.begin():
-                            yield (
-                                UserRepository(broadcast_session),
-                                BroadcastRepository(broadcast_session),
-                            )
+            @asynccontextmanager
+            async def broadcast_repository_scope():
+                async with self._database.get_session() as broadcast_session:
+                    async with broadcast_session.begin():
+                        yield (
+                            UserRepository(broadcast_session),
+                            BroadcastRepository(broadcast_session),
+                        )
 
-                register_service = RegisterService(user_repository=user_repository)
-                user_service = UserService(user_repository=user_repository)
-                support_service = SupportService(support_repository=support_repository)
-                bot_settings_service = BotSettingsService(
-                    bot_settings_repository=bot_settings_repository
-                )
-                broadcast_service = BroadcastService(
-                    telegram_gateway=telegram_gateway,
-                    repository_factory=broadcast_repository_scope,
-                    broadcast_lock=self._broadcast_lock,
-                )
-                antispam_service = AntiSpamService(antispam_repository=antispam_repository)
-                force_subscription_service = ForceSubscriptionService(
-                    telegram_gateway=telegram_gateway,
-                    repository=force_subscription_repository,
-                    event_repository=force_subscription_event_repository,
-                )
-                notification_service = NotificationService(telegram_gateway=telegram_gateway)
-                admin_service = AdminService(admin_repository=admin_repository)
+            register_service = RegisterService(
+                user_repository=user_repository,
+                transaction_manager=transaction_manager,
+            )
+            user_service = UserService(
+                user_repository=user_repository,
+                transaction_manager=transaction_manager,
+            )
+            support_service = SupportService(
+                support_repository=support_repository,
+                transaction_manager=transaction_manager,
+            )
+            bot_settings_service = BotSettingsService(
+                bot_settings_repository=bot_settings_repository,
+                transaction_manager=transaction_manager,
+            )
+            broadcast_service = BroadcastService(
+                telegram_gateway=telegram_gateway,
+                repository_factory=broadcast_repository_scope,
+                broadcast_lock=self._broadcast_lock,
+            )
+            antispam_service = AntiSpamService(
+                antispam_repository=antispam_repository,
+                transaction_manager=transaction_manager,
+            )
+            force_subscription_service = ForceSubscriptionService(
+                telegram_gateway=telegram_gateway,
+                repository=force_subscription_repository,
+                event_repository=force_subscription_event_repository,
+                transaction_manager=transaction_manager,
+            )
+            notification_service = NotificationService(telegram_gateway=telegram_gateway)
+            admin_service = AdminService(
+                admin_repository=admin_repository,
+                transaction_manager=transaction_manager,
+            )
 
-                data["register_service"] = register_service
-                data["user_service"] = user_service
-                data["support_service"] = support_service
-                data["bot_settings_service"] = bot_settings_service
-                data["broadcast_service"] = broadcast_service
-                data["antispam_service"] = antispam_service
-                data["force_subscription_service"] = force_subscription_service
-                data["notification_service"] = notification_service
-                data["admin_service"] = admin_service
-                data["system_service"] = self._system_service
+            data["register_service"] = register_service
+            data["user_service"] = user_service
+            data["support_service"] = support_service
+            data["bot_settings_service"] = bot_settings_service
+            data["broadcast_service"] = broadcast_service
+            data["antispam_service"] = antispam_service
+            data["force_subscription_service"] = force_subscription_service
+            data["notification_service"] = notification_service
+            data["admin_service"] = admin_service
+            data["system_service"] = self._system_service
 
-                return await handler(event, data)
+            return await handler(event, data)
