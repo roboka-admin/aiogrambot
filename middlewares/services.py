@@ -96,6 +96,7 @@ class ServicesMiddleware(BaseMiddleware):
             notification_service = NotificationService(telegram_gateway=telegram_gateway)
             admin_service = AdminService(
                 admin_repository=admin_repository,
+                user_repository=user_repository,
                 transaction_manager=transaction_manager,
             )
 
