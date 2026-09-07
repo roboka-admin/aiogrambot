@@ -5,6 +5,7 @@ from aiogram import Bot, Dispatcher
 
 from config import ADMIN_IDS, BOT_TOKEN, DATABASE_URL
 from core.database import Database
+from core.transaction import SessionTransactionManager
 from handlers.admin import router as admin_router
 from handlers.admin_broadcast import router as admin_broadcast_router
 from handlers.admin_cancel import router as admin_cancel_router
@@ -36,9 +37,12 @@ from services.system import SystemService
 async def bootstrap_admin_system(database: Database) -> None:
     """Seed configured owners and synchronize admin capabilities at startup."""
     async with database.get_session() as session:
-        async with session.begin():
-            admin_service = AdminService(admin_repository=AdminRepository(session))
-            await admin_service.bootstrap(ADMIN_IDS)
+        transaction_manager = SessionTransactionManager(session)
+        admin_service = AdminService(
+            admin_repository=AdminRepository(session),
+            transaction_manager=transaction_manager,
+        )
+        await admin_service.bootstrap(ADMIN_IDS)
 
 
 async def main() -> None:
