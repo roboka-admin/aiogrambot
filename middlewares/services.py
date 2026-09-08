@@ -14,6 +14,7 @@ from repositories.bot_settings import BotSettingsRepository
 from repositories.broadcast import BroadcastRepository
 from repositories.force_subscription import ForceSubscriptionRepository
 from repositories.force_subscription_event import ForceSubscriptionEventRepository
+from repositories.referral import ReferralRepository
 from repositories.support import SupportRepository
 from repositories.user import UserRepository
 from services.admin import AdminService
@@ -22,6 +23,7 @@ from services.bot_settings import BotSettingsService
 from services.broadcast import BroadcastService
 from services.force_subscription import ForceSubscriptionService
 from services.notification import NotificationService
+from services.referral import ReferralService
 from services.register import RegisterService
 from services.support import SupportService
 from services.system import SystemService
@@ -51,6 +53,7 @@ class ServicesMiddleware(BaseMiddleware):
             force_subscription_repository = ForceSubscriptionRepository(session)
             force_subscription_event_repository = ForceSubscriptionEventRepository(session)
             admin_repository = AdminRepository(session)
+            referral_repository = ReferralRepository(session)
             telegram_gateway = AiogramTelegramGateway(data["bot"])
 
             @asynccontextmanager
@@ -99,6 +102,10 @@ class ServicesMiddleware(BaseMiddleware):
                 user_repository=user_repository,
                 transaction_manager=transaction_manager,
             )
+            referral_service = ReferralService(
+                referral_repository=referral_repository,
+                transaction_manager=transaction_manager,
+            )
 
             data["register_service"] = register_service
             data["user_service"] = user_service
@@ -109,6 +116,7 @@ class ServicesMiddleware(BaseMiddleware):
             data["force_subscription_service"] = force_subscription_service
             data["notification_service"] = notification_service
             data["admin_service"] = admin_service
+            data["referral_service"] = referral_service
             data["system_service"] = self._system_service
 
             return await handler(event, data)
