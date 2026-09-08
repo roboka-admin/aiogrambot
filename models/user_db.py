@@ -17,7 +17,7 @@ class UserRecord(Base):
     name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     age: Mapped[int | None] = mapped_column(nullable=True)
     coins: Mapped[int] = mapped_column(default=0)
-    warnings: Mapped[int] = mapped_column(String(20), default=UserStatus.ACTIVE.value)
+    warnings: Mapped[int] = mapped_column(default=0)
     status: Mapped[str] = mapped_column(String(20), default=UserStatus.ACTIVE.value)
     registration_status: Mapped[str] = mapped_column(
         String(20), default=RegistrationStatus.UNREGISTERED.value
