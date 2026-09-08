@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import BigInteger, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.timezone import tehran_now
@@ -24,3 +24,12 @@ class UserRecord(Base):
     )
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=tehran_now)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=tehran_now)
+    referral_code: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
+    referred_by_user_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("users.telegram_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    referral_processed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
