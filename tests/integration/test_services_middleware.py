@@ -1,4 +1,4 @@
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, ExitStack
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -16,6 +16,35 @@ class FakeDatabase:
         yield self.session
 
 
+def _enter_service_patches(stack: ExitStack) -> dict[str, MagicMock]:
+    names = (
+        "UserRepository",
+        "SupportRepository",
+        "BroadcastRepository",
+        "AntiSpamRepository",
+        "BotSettingsRepository",
+        "ForceSubscriptionRepository",
+        "ForceSubscriptionEventRepository",
+        "AdminRepository",
+        "ReferralRepository",
+        "AiogramTelegramGateway",
+        "RegisterService",
+        "UserService",
+        "SupportService",
+        "BotSettingsService",
+        "BroadcastService",
+        "AntiSpamService",
+        "ForceSubscriptionService",
+        "NotificationService",
+        "AdminService",
+        "ReferralService",
+    )
+    return {
+        name: stack.enter_context(patch(f"middlewares.services.{name}"))
+        for name in names
+    }
+
+
 @pytest.mark.asyncio
 async def test_services_middleware_creates_and_injects_request_scoped_dependencies():
     session = MagicMock()
@@ -25,102 +54,82 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     handler = AsyncMock(return_value="handled")
     data = {"bot": bot}
 
-    with (
-        patch("middlewares.services.UserRepository") as user_repository,
-        patch("middlewares.services.SupportRepository") as support_repository,
-        patch("middlewares.services.BroadcastRepository") as broadcast_repository,
-        patch("middlewares.services.AntiSpamRepository") as antispam_repository,
-        patch("middlewares.services.BotSettingsRepository") as bot_settings_repository,
-        patch("middlewares.services.ForceSubscriptionRepository") as force_subscription_repository,
-        patch("middlewares.services.ForceSubscriptionEventRepository") as force_subscription_event_repository,
-        patch("middlewares.services.AdminRepository") as admin_repository,
-        patch("middlewares.services.ReferralRepository") as referral_repository,
-        patch("middlewares.services.AiogramTelegramGateway") as telegram_gateway,
-        patch("middlewares.services.RegisterService") as register_service,
-        patch("middlewares.services.UserService") as user_service,
-        patch("middlewares.services.SupportService") as support_service,
-        patch("middlewares.services.BotSettingsService") as bot_settings_service,
-        patch("middlewares.services.BroadcastService") as broadcast_service,
-        patch("middlewares.services.AntiSpamService") as antispam_service,
-        patch("middlewares.services.ForceSubscriptionService") as force_subscription_service,
-        patch("middlewares.services.NotificationService") as notification_service,
-        patch("middlewares.services.AdminService") as admin_service,
-        patch("middlewares.services.ReferralService") as referral_service,
-    ):
+    with ExitStack() as stack:
+        mocks = _enter_service_patches(stack)
         middleware = ServicesMiddleware(database=database, system_service=system_service)
         result = await middleware(handler, MagicMock(), data)
 
     assert result == "handled"
     session.begin.assert_not_called()
-    transaction_manager = register_service.call_args.kwargs["transaction_manager"]
+    transaction_manager = mocks["RegisterService"].call_args.kwargs["transaction_manager"]
 
-    telegram_gateway.assert_called_once_with(bot)
-    user_repository.assert_called_once_with(session)
-    support_repository.assert_called_once_with(session)
-    antispam_repository.assert_called_once_with(session)
-    bot_settings_repository.assert_called_once_with(session)
-    force_subscription_repository.assert_called_once_with(session)
-    force_subscription_event_repository.assert_called_once_with(session)
-    admin_repository.assert_called_once_with(session)
-    referral_repository.assert_called_once_with(session)
-    broadcast_repository.assert_not_called()
+    mocks["AiogramTelegramGateway"].assert_called_once_with(bot)
+    mocks["UserRepository"].assert_called_once_with(session)
+    mocks["SupportRepository"].assert_called_once_with(session)
+    mocks["AntiSpamRepository"].assert_called_once_with(session)
+    mocks["BotSettingsRepository"].assert_called_once_with(session)
+    mocks["ForceSubscriptionRepository"].assert_called_once_with(session)
+    mocks["ForceSubscriptionEventRepository"].assert_called_once_with(session)
+    mocks["AdminRepository"].assert_called_once_with(session)
+    mocks["ReferralRepository"].assert_called_once_with(session)
+    mocks["BroadcastRepository"].assert_not_called()
 
-    register_service.assert_called_once_with(
-        user_repository=user_repository.return_value,
+    mocks["RegisterService"].assert_called_once_with(
+        user_repository=mocks["UserRepository"].return_value,
         transaction_manager=transaction_manager,
     )
-    user_service.assert_called_once_with(
-        user_repository=user_repository.return_value,
+    mocks["UserService"].assert_called_once_with(
+        user_repository=mocks["UserRepository"].return_value,
         transaction_manager=transaction_manager,
     )
-    support_service.assert_called_once_with(
-        support_repository=support_repository.return_value,
+    mocks["SupportService"].assert_called_once_with(
+        support_repository=mocks["SupportRepository"].return_value,
         transaction_manager=transaction_manager,
     )
-    bot_settings_service.assert_called_once_with(
-        bot_settings_repository=bot_settings_repository.return_value,
+    mocks["BotSettingsService"].assert_called_once_with(
+        bot_settings_repository=mocks["BotSettingsRepository"].return_value,
         transaction_manager=transaction_manager,
     )
 
-    broadcast_service.assert_called_once()
-    broadcast_kwargs = broadcast_service.call_args.kwargs
-    assert broadcast_kwargs["telegram_gateway"] is telegram_gateway.return_value
+    mocks["BroadcastService"].assert_called_once()
+    broadcast_kwargs = mocks["BroadcastService"].call_args.kwargs
+    assert broadcast_kwargs["telegram_gateway"] is mocks["AiogramTelegramGateway"].return_value
     assert callable(broadcast_kwargs["repository_factory"])
     assert broadcast_kwargs["broadcast_lock"] is middleware._broadcast_lock
 
-    antispam_service.assert_called_once_with(
-        antispam_repository=antispam_repository.return_value,
+    mocks["AntiSpamService"].assert_called_once_with(
+        antispam_repository=mocks["AntiSpamRepository"].return_value,
         transaction_manager=transaction_manager,
     )
-    force_subscription_service.assert_called_once_with(
-        telegram_gateway=telegram_gateway.return_value,
-        repository=force_subscription_repository.return_value,
-        event_repository=force_subscription_event_repository.return_value,
+    mocks["ForceSubscriptionService"].assert_called_once_with(
+        telegram_gateway=mocks["AiogramTelegramGateway"].return_value,
+        repository=mocks["ForceSubscriptionRepository"].return_value,
+        event_repository=mocks["ForceSubscriptionEventRepository"].return_value,
         transaction_manager=transaction_manager,
     )
-    notification_service.assert_called_once_with(
-        telegram_gateway=telegram_gateway.return_value
+    mocks["NotificationService"].assert_called_once_with(
+        telegram_gateway=mocks["AiogramTelegramGateway"].return_value
     )
-    admin_service.assert_called_once_with(
-        admin_repository=admin_repository.return_value,
-        user_repository=user_repository.return_value,
+    mocks["AdminService"].assert_called_once_with(
+        admin_repository=mocks["AdminRepository"].return_value,
+        user_repository=mocks["UserRepository"].return_value,
         transaction_manager=transaction_manager,
     )
-    referral_service.assert_called_once_with(
-        referral_repository=referral_repository.return_value,
+    mocks["ReferralService"].assert_called_once_with(
+        referral_repository=mocks["ReferralRepository"].return_value,
         transaction_manager=transaction_manager,
     )
 
-    assert data["register_service"] is register_service.return_value
-    assert data["user_service"] is user_service.return_value
-    assert data["support_service"] is support_service.return_value
-    assert data["bot_settings_service"] is bot_settings_service.return_value
-    assert data["broadcast_service"] is broadcast_service.return_value
-    assert data["antispam_service"] is antispam_service.return_value
-    assert data["force_subscription_service"] is force_subscription_service.return_value
-    assert data["notification_service"] is notification_service.return_value
-    assert data["admin_service"] is admin_service.return_value
-    assert data["referral_service"] is referral_service.return_value
+    assert data["register_service"] is mocks["RegisterService"].return_value
+    assert data["user_service"] is mocks["UserService"].return_value
+    assert data["support_service"] is mocks["SupportService"].return_value
+    assert data["bot_settings_service"] is mocks["BotSettingsService"].return_value
+    assert data["broadcast_service"] is mocks["BroadcastService"].return_value
+    assert data["antispam_service"] is mocks["AntiSpamService"].return_value
+    assert data["force_subscription_service"] is mocks["ForceSubscriptionService"].return_value
+    assert data["notification_service"] is mocks["NotificationService"].return_value
+    assert data["admin_service"] is mocks["AdminService"].return_value
+    assert data["referral_service"] is mocks["ReferralService"].return_value
     assert data["system_service"] is system_service
     handler.assert_awaited_once()
 
@@ -135,28 +144,8 @@ async def test_services_middleware_does_not_create_transaction_for_handler():
     async def handler(event, data):
         raise RuntimeError("handler failed")
 
-    with (
-        patch("middlewares.services.UserRepository"),
-        patch("middlewares.services.SupportRepository"),
-        patch("middlewares.services.BroadcastRepository"),
-        patch("middlewares.services.AntiSpamRepository"),
-        patch("middlewares.services.BotSettingsRepository"),
-        patch("middlewares.services.ForceSubscriptionRepository"),
-        patch("middlewares.services.ForceSubscriptionEventRepository"),
-        patch("middlewares.services.AdminRepository"),
-        patch("middlewares.services.ReferralRepository"),
-        patch("middlewares.services.AiogramTelegramGateway"),
-        patch("middlewares.services.RegisterService"),
-        patch("middlewares.services.UserService"),
-        patch("middlewares.services.SupportService"),
-        patch("middlewares.services.BotSettingsService"),
-        patch("middlewares.services.BroadcastService"),
-        patch("middlewares.services.AntiSpamService"),
-        patch("middlewares.services.ForceSubscriptionService"),
-        patch("middlewares.services.NotificationService"),
-        patch("middlewares.services.AdminService"),
-        patch("middlewares.services.ReferralService"),
-    ):
+    with ExitStack() as stack:
+        _enter_service_patches(stack)
         middleware = ServicesMiddleware(database=database, system_service=system_service)
         with pytest.raises(RuntimeError, match="handler failed"):
             await middleware(handler, MagicMock(), {"bot": bot})
