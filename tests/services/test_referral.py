@@ -1,6 +1,8 @@
 import pytest
+from sqlalchemy import BigInteger
 
 from models.user import User
+from models.user_db import UserRecord
 from services.referral import ReferralService
 
 
@@ -58,6 +60,11 @@ class FakeReferralRepository:
         return users[offset : offset + limit]
 
 
+VALID_REFERRAL_CODE = "ref_" + "b" * 32
+OTHER_REFERRAL_CODE = "ref_" + "c" * 32
+SELF_REFERRAL_CODE = "ref_" + "d" * 32
+
+
 def make_user(telegram_id: int, code: str | None = None) -> User:
     return User(
         telegram_id=telegram_id,
@@ -88,19 +95,25 @@ async def test_ensure_referral_code_generates_opaque_code(service_and_repository
 @pytest.mark.asyncio
 async def test_start_referral_claims_only_new_user_once(service_and_repository):
     service, repository = service_and_repository
-    repository.users[1] = make_user(1, "ref_owner")
-    repository.codes["ref_owner"] = 1
+    repository.users[1] = make_user(1, VALID_REFERRAL_CODE)
+    repository.codes[VALID_REFERRAL_CODE] = 1
     repository.users[2] = make_user(2)
 
-    assert await service.process_start(telegram_id=2, referral_code="ref_owner") is True
+    assert await service.process_start(
+        telegram_id=2, referral_code=VALID_REFERRAL_CODE
+    ) is True
     assert repository.users[2].referred_by_user_id == 1
     assert repository.users[2].referral_processed_at is not None
-    assert await service.process_start(telegram_id=2, referral_code="ref_owner") is False
-    assert await service.process_start(telegram_id=2, referral_code="ref_other") is False
+    assert await service.process_start(
+        telegram_id=2, referral_code=VALID_REFERRAL_CODE
+    ) is False
+    assert await service.process_start(
+        telegram_id=2, referral_code=OTHER_REFERRAL_CODE
+    ) is False
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("referral_code", [None, "", "ref_missing"])
+@pytest.mark.parametrize("referral_code", [None, "", "ref_missing", "ref_owner"])
 async def test_invalid_or_missing_referral_is_consumed_without_assignment(
     service_and_repository, referral_code
 ):
@@ -110,16 +123,20 @@ async def test_invalid_or_missing_referral_is_consumed_without_assignment(
     assert await service.process_start(telegram_id=2, referral_code=referral_code) is False
     assert repository.users[2].referred_by_user_id is None
     assert repository.users[2].referral_processed_at is not None
-    assert await service.process_start(telegram_id=2, referral_code="ref_owner") is False
+    assert await service.process_start(
+        telegram_id=2, referral_code=VALID_REFERRAL_CODE
+    ) is False
 
 
 @pytest.mark.asyncio
 async def test_self_referral_is_rejected_and_locked(service_and_repository):
     service, repository = service_and_repository
-    repository.users[1] = make_user(1, "ref_self")
-    repository.codes["ref_self"] = 1
+    repository.users[1] = make_user(1, SELF_REFERRAL_CODE)
+    repository.codes[SELF_REFERRAL_CODE] = 1
 
-    assert await service.process_start(telegram_id=1, referral_code="ref_self") is False
+    assert await service.process_start(
+        telegram_id=1, referral_code=SELF_REFERRAL_CODE
+    ) is False
     assert repository.users[1].referred_by_user_id is None
     assert repository.users[1].referral_processed_at is not None
 
@@ -140,3 +157,11 @@ async def test_referral_statistics_are_paginated(service_and_repository):
     assert total == 3
     assert page == 2
     assert [user.telegram_id for user in users] == [4]
+
+
+def test_user_record_referral_fk_matches_telegram_id_type():
+    """MySQL rejects FK when INTEGER PK is paired with BIGINT referrer id."""
+    telegram_id_type = UserRecord.__table__.c.telegram_id.type
+    referred_by_type = UserRecord.__table__.c.referred_by_user_id.type
+    assert isinstance(telegram_id_type, BigInteger)
+    assert isinstance(referred_by_type, BigInteger)
