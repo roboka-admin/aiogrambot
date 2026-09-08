@@ -26,6 +26,9 @@ class UserRepository(IUserRepository):
             registration_status=user.registration_status.value,
             first_seen_at=user.first_seen_at,
             last_seen_at=user.last_seen_at,
+            referral_code=user.referral_code,
+            referred_by_user_id=user.referred_by_user_id,
+            referral_processed_at=user.referral_processed_at,
         )
         self._session.add(record)
         await self._session.flush()
@@ -58,6 +61,9 @@ class UserRepository(IUserRepository):
         record.registration_status = user.registration_status.value
         record.first_seen_at = user.first_seen_at
         record.last_seen_at = user.last_seen_at
+        record.referral_code = user.referral_code
+        record.referred_by_user_id = user.referred_by_user_id
+        record.referral_processed_at = user.referral_processed_at
         await self._session.flush()
         return self._to_domain(record)
 
@@ -173,4 +179,7 @@ class UserRepository(IUserRepository):
             registration_status=RegistrationStatus(record.registration_status),
             first_seen_at=record.first_seen_at,
             last_seen_at=record.last_seen_at,
+            referral_code=record.referral_code,
+            referred_by_user_id=record.referred_by_user_id,
+            referral_processed_at=record.referral_processed_at,
         )
