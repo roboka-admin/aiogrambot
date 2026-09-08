@@ -30,3 +30,6 @@ class User:
     registration_status: RegistrationStatus = RegistrationStatus.UNREGISTERED
     first_seen_at: datetime = field(default_factory=tehran_now)
     last_seen_at: datetime = field(default_factory=tehran_now)
+    referral_code: str | None = None
+    referred_by_user_id: int | None = None
+    referral_processed_at: datetime | None = None
