@@ -11,7 +11,9 @@ from models.user import RegistrationStatus, UserStatus
 class UserRecord(Base):
     __tablename__ = "users"
 
-    telegram_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    telegram_id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True, autoincrement=False
+    )
     telegram_name: Mapped[str] = mapped_column(String(100), default="")
     username: Mapped[str | None] = mapped_column(String(100), nullable=True)
     name: Mapped[str | None] = mapped_column(String(100), nullable=True)
