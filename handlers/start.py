@@ -1,10 +1,11 @@
 from aiogram import Router
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandObject, CommandStart
 from aiogram.types import Message
 
 from keyboards.menu import main_menu
 from keyboards.start import start_keyboard
 from models.user import RegistrationStatus, User
+from services.referral import ReferralService
 
 
 router = Router()
@@ -14,6 +15,8 @@ router = Router()
 async def start_handler(
     message: Message,
     user: User,
+    command: CommandObject,
+    referral_service: ReferralService,
 ) -> None:
     if user.registration_status == RegistrationStatus.REGISTERED:
         await message.answer(
@@ -22,6 +25,11 @@ async def start_handler(
             reply_markup=main_menu,
         )
         return
+
+    await referral_service.process_start(
+        telegram_id=user.telegram_id,
+        referral_code=command.args,
+    )
 
     await message.answer(
         "سلام 👋\n"
