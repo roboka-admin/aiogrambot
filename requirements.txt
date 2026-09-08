@@ -7,5 +7,4 @@ python-dotenv
 psutil
 pytest
 pytest-asyncio
-pytest-dotenv
 pytest-cov

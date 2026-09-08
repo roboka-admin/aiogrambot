@@ -75,23 +75,25 @@ async def main() -> None:
         dp.message.outer_middleware(AntiSpamMiddleware())
         dp.callback_query.outer_middleware(AntiSpamMiddleware())
 
-        dp.include_router(start_router)
-        dp.include_router(register_router)
-        dp.include_router(profile_router)
-        dp.include_router(support_router)
-        dp.include_router(edit_profile_router)
-        dp.include_router(force_subscription_router)
-        dp.include_router(admin_system_stats_router)
-        dp.include_router(admin_force_subscription_stats_router)
-        dp.include_router(admin_stats_refresh_router)
-        dp.include_router(admin_management_router)
-        dp.include_router(admin_router)
-        dp.include_router(admin_cancel_router)
-        dp.include_router(admin_broadcast_router)
-        dp.include_router(admin_settings_router)
-        dp.include_router(admin_force_subscription_router)
-        dp.include_router(admin_support_settings_router)
-        dp.include_router(admin_support_router)
+        dp.include_routers(
+            start_router,
+            register_router,
+            profile_router,
+            support_router,
+            edit_profile_router,
+            force_subscription_router,
+            admin_system_stats_router,
+            admin_force_subscription_stats_router,
+            admin_stats_refresh_router,
+            admin_management_router,
+            admin_router,
+            admin_cancel_router,
+            admin_broadcast_router,
+            admin_settings_router,
+            admin_force_subscription_router,
+            admin_support_settings_router,
+            admin_support_router
+            )
 
         await dp.start_polling(bot)
     finally:
