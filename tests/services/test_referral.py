@@ -1,8 +1,5 @@
-from unittest.mock import AsyncMock
-
 import pytest
 
-from core.timezone import tehran_now
 from models.user import User
 from services.referral import ReferralService
 
@@ -11,7 +8,6 @@ class FakeReferralRepository:
     def __init__(self) -> None:
         self.users: dict[int, User] = {}
         self.codes: dict[str, int] = {}
-        self.processed: set[int] = set()
 
     async def get_referral_code(self, telegram_id: int) -> str | None:
         user = self.users.get(telegram_id)
@@ -31,21 +27,19 @@ class FakeReferralRepository:
 
     async def claim_referral(self, telegram_id: int, referrer_id: int, processed_at) -> bool:
         user = self.users[telegram_id]
-        if telegram_id in self.processed or user.referred_by_user_id is not None:
+        if user.referral_processed_at is not None or user.referred_by_user_id is not None:
             return False
         if telegram_id == referrer_id:
             return False
         user.referred_by_user_id = referrer_id
         user.referral_processed_at = processed_at
-        self.processed.add(telegram_id)
         return True
 
     async def mark_referral_processed(self, telegram_id: int, processed_at) -> bool:
         user = self.users[telegram_id]
-        if telegram_id in self.processed:
+        if user.referral_processed_at is not None:
             return False
         user.referral_processed_at = processed_at
-        self.processed.add(telegram_id)
         return True
 
     async def count_referrals(self, telegram_id: int) -> int:
@@ -53,16 +47,23 @@ class FakeReferralRepository:
             user.referred_by_user_id == telegram_id for user in self.users.values()
         )
 
-    async def list_referrals(self, telegram_id: int, *, offset: int, limit: int) -> list[User]:
+    async def list_referrals(
+        self, telegram_id: int, *, offset: int, limit: int
+    ) -> list[User]:
         users = [
-            user for user in self.users.values()
+            user
+            for user in self.users.values()
             if user.referred_by_user_id == telegram_id
         ]
         return users[offset : offset + limit]
 
 
 def make_user(telegram_id: int, code: str | None = None) -> User:
-    return User(telegram_id=telegram_id, telegram_name=f"User {telegram_id}", referral_code=code)
+    return User(
+        telegram_id=telegram_id,
+        telegram_name=f"User {telegram_id}",
+        referral_code=code,
+    )
 
 
 @pytest.fixture
@@ -74,7 +75,7 @@ def service_and_repository() -> tuple[ReferralService, FakeReferralRepository]:
 @pytest.mark.asyncio
 async def test_ensure_referral_code_generates_opaque_code(service_and_repository, monkeypatch):
     service, repository = service_and_repository
-    await repository.users.setdefault(42, make_user(42))
+    repository.users[42] = make_user(42)
     monkeypatch.setattr("services.referral.secrets.token_hex", lambda _: "a" * 32)
 
     code = await service.ensure_referral_code(42)
