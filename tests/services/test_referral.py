@@ -138,5 +138,5 @@ async def test_referral_statistics_are_paginated(service_and_repository):
         telegram_id=1, page=99, page_size=2
     )
     assert total == 3
-    assert page == 1
+    assert page == 2
     assert [user.telegram_id for user in users] == [4]
