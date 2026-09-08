@@ -1,4 +1,5 @@
 import logging
+from typing import cast
 
 from aiogram import Router
 from aiogram.types import ErrorEvent, Message
@@ -33,6 +34,10 @@ def _get_message(event: ErrorEvent) -> Message | None:
     update = event.update
     if update.message is not None:
         return update.message
+
     if update.callback_query is not None:
-        return update.callback_query.message
+        message = update.callback_query.message
+        if message is not None and callable(getattr(message, "answer", None)):
+            return cast(Message, message)
+
     return None
