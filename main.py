@@ -1,9 +1,11 @@
 import asyncio
 import logging
+from collections.abc import Iterable
 
 from aiogram import Bot, Dispatcher
 
 from config import ADMIN_IDS, BOT_TOKEN, DATABASE_URL
+from core.commands import setup_bot_commands
 from core.database import Database
 from core.errors import handle_error
 from core.transaction import SessionTransactionManager
@@ -30,14 +32,15 @@ from middlewares.logging import LoggingMiddleware
 from middlewares.maintenance import MaintenanceMiddleware
 from middlewares.services import ServicesMiddleware
 from middlewares.user import UserMiddleware
+from models.admin import AdminStatus
 from repositories.admin import AdminRepository
 from repositories.user import UserRepository
 from services.admin import AdminService
 from services.system import SystemService
 
 
-async def bootstrap_admin_system(database: Database) -> None:
-    """Seed configured owners and synchronize admin capabilities at startup."""
+async def bootstrap_admin_system(database: Database) -> Iterable[int]:
+    """Seed configured owners, synchronize capabilities, and return active admins."""
     async with database.get_session() as session:
         transaction_manager = SessionTransactionManager(session)
         admin_service = AdminService(
@@ -46,6 +49,12 @@ async def bootstrap_admin_system(database: Database) -> None:
             transaction_manager=transaction_manager,
         )
         await admin_service.bootstrap(ADMIN_IDS)
+        admins = await admin_service.list_admins()
+        return tuple(
+            admin.telegram_id
+            for admin in admins
+            if admin.status is AdminStatus.ACTIVE
+        )
 
 
 async def main() -> None:
@@ -64,7 +73,8 @@ async def main() -> None:
     system_service = SystemService(database=database)
 
     try:
-        await bootstrap_admin_system(database)
+        active_admin_ids = await bootstrap_admin_system(database)
+        await setup_bot_commands(bot, active_admin_ids)
 
         dp.update.middleware(LoggingMiddleware(system_service=system_service))
         dp.update.middleware(ServicesMiddleware(database=database, system_service=system_service))
@@ -92,8 +102,8 @@ async def main() -> None:
             admin_settings_router,
             admin_force_subscription_router,
             admin_support_settings_router,
-            admin_support_router
-            )
+            admin_support_router,
+        )
 
         await dp.start_polling(bot)
     finally:
