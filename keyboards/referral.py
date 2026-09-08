@@ -1,10 +1,24 @@
+from urllib.parse import quote
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from callbacks.referral import ReferralListCallback
 
 
 def referral_keyboard(*, referral_link: str, has_referrals: bool) -> InlineKeyboardMarkup:
-    rows = [[InlineKeyboardButton(text="🔗 اشتراک‌گذاری لینک دعوت", url=referral_link)]]
+    share_url = (
+        "https://t.me/share/url?url="
+        f"{quote(referral_link, safe='')}"
+        f"&text={quote('دوستت را به ربات دعوت کن 👋', safe='')}"
+    )
+    rows = [
+        [
+            InlineKeyboardButton(
+                text="🔗 اشتراک‌گذاری لینک دعوت",
+                url=share_url,
+            )
+        ]
+    ]
     if has_referrals:
         rows.append(
             [
