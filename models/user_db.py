@@ -17,14 +17,16 @@ class UserRecord(Base):
     name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     age: Mapped[int | None] = mapped_column(nullable=True)
     coins: Mapped[int] = mapped_column(default=0)
-    warnings: Mapped[int] = mapped_column(default=0)
+    warnings: Mapped[int] = mapped_column(String(20), default=UserStatus.ACTIVE.value)
     status: Mapped[str] = mapped_column(String(20), default=UserStatus.ACTIVE.value)
     registration_status: Mapped[str] = mapped_column(
         String(20), default=RegistrationStatus.UNREGISTERED.value
     )
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=tehran_now)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=tehran_now)
-    referral_code: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
+    referral_code: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True, unique=True
+    )
     referred_by_user_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("users.telegram_id", ondelete="SET NULL"),
