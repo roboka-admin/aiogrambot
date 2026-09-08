@@ -34,6 +34,7 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
         patch("middlewares.services.ForceSubscriptionRepository") as force_subscription_repository,
         patch("middlewares.services.ForceSubscriptionEventRepository") as force_subscription_event_repository,
         patch("middlewares.services.AdminRepository") as admin_repository,
+        patch("middlewares.services.ReferralRepository") as referral_repository,
         patch("middlewares.services.AiogramTelegramGateway") as telegram_gateway,
         patch("middlewares.services.RegisterService") as register_service,
         patch("middlewares.services.UserService") as user_service,
@@ -44,6 +45,7 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
         patch("middlewares.services.ForceSubscriptionService") as force_subscription_service,
         patch("middlewares.services.NotificationService") as notification_service,
         patch("middlewares.services.AdminService") as admin_service,
+        patch("middlewares.services.ReferralService") as referral_service,
     ):
         middleware = ServicesMiddleware(database=database, system_service=system_service)
         result = await middleware(handler, MagicMock(), data)
@@ -60,6 +62,7 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     force_subscription_repository.assert_called_once_with(session)
     force_subscription_event_repository.assert_called_once_with(session)
     admin_repository.assert_called_once_with(session)
+    referral_repository.assert_called_once_with(session)
     broadcast_repository.assert_not_called()
 
     register_service.assert_called_once_with(
@@ -103,6 +106,10 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
         user_repository=user_repository.return_value,
         transaction_manager=transaction_manager,
     )
+    referral_service.assert_called_once_with(
+        referral_repository=referral_repository.return_value,
+        transaction_manager=transaction_manager,
+    )
 
     assert data["register_service"] is register_service.return_value
     assert data["user_service"] is user_service.return_value
@@ -113,6 +120,7 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     assert data["force_subscription_service"] is force_subscription_service.return_value
     assert data["notification_service"] is notification_service.return_value
     assert data["admin_service"] is admin_service.return_value
+    assert data["referral_service"] is referral_service.return_value
     assert data["system_service"] is system_service
     handler.assert_awaited_once()
 
@@ -136,6 +144,7 @@ async def test_services_middleware_does_not_create_transaction_for_handler():
         patch("middlewares.services.ForceSubscriptionRepository"),
         patch("middlewares.services.ForceSubscriptionEventRepository"),
         patch("middlewares.services.AdminRepository"),
+        patch("middlewares.services.ReferralRepository"),
         patch("middlewares.services.AiogramTelegramGateway"),
         patch("middlewares.services.RegisterService"),
         patch("middlewares.services.UserService"),
@@ -146,6 +155,7 @@ async def test_services_middleware_does_not_create_transaction_for_handler():
         patch("middlewares.services.ForceSubscriptionService"),
         patch("middlewares.services.NotificationService"),
         patch("middlewares.services.AdminService"),
+        patch("middlewares.services.ReferralService"),
     ):
         middleware = ServicesMiddleware(database=database, system_service=system_service)
         with pytest.raises(RuntimeError, match="handler failed"):
