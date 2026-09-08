@@ -1,18 +1,19 @@
 from math import ceil
 
 from aiogram import F, Router
-from aiogram.filters import callback_data
 from aiogram.filters.callback_data import CallbackData
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.deep_linking import create_start_link
 
 from callbacks.referral import ReferralListCallback
 from core.telegram import edit_message_if_changed
+from keyboards.referral import referral_keyboard, referral_list_keyboard
 from middlewares.registration import RegistrationRequiredMiddleware
 from models.user import User
 from services.referral import ReferralService
-from keyboards.referral import referral_keyboard, referral_list_keyboard
 
+
+_REFERRAL_PAGE_SIZE = 10
 
 router = Router()
 router.message.middleware(RegistrationRequiredMiddleware())
@@ -52,12 +53,15 @@ async def referral_list_handler(
     users, total, page = await referral_service.get_referrals_page(
         telegram_id=user.telegram_id,
         page=callback_data.page,
+        page_size=_REFERRAL_PAGE_SIZE,
     )
-    total_pages = max(1, ceil(total / 10))
+    total_pages = max(1, ceil(total / _REFERRAL_PAGE_SIZE))
 
     lines = ["👥 دعوت‌شده‌های شما", ""]
     if users:
-        for index, referred_user in enumerate(users, start=(page - 1) * 10 + 1):
+        for index, referred_user in enumerate(
+            users, start=(page - 1) * _REFERRAL_PAGE_SIZE + 1
+        ):
             display_name = referred_user.name or referred_user.telegram_name or "بدون نام"
             lines.append(f"{index}. {display_name}")
     else:
