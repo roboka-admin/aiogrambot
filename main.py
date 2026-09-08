@@ -5,6 +5,7 @@ from aiogram import Bot, Dispatcher
 
 from config import ADMIN_IDS, BOT_TOKEN, DATABASE_URL
 from core.database import Database
+from core.errors import handle_error
 from core.transaction import SessionTransactionManager
 from handlers.admin import router as admin_router
 from handlers.admin_broadcast import router as admin_broadcast_router
@@ -18,7 +19,6 @@ from handlers.admin_support import router as admin_support_router
 from handlers.admin_support_settings import router as admin_support_settings_router
 from handlers.admin_system_stats import router as admin_system_stats_router
 from handlers.edit_profile import router as edit_profile_router
-from handlers.errors import handle_error
 from handlers.force_subscription import router as force_subscription_router
 from handlers.profile import router as profile_router
 from handlers.register import router as register_router
