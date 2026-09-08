@@ -2,7 +2,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from callbacks.admin import AdminCreateConfirmCallback
 from exceptions.user import UserNotFoundError
 from handlers.admin_management import admin_create_confirm_handler, admin_create_id_handler
 from models.admin import Admin
@@ -33,6 +32,7 @@ async def test_admin_create_id_handler_rejects_user_who_has_not_started_bot():
 async def test_admin_create_confirm_handler_notifies_new_admin_after_success():
     callback = MagicMock()
     callback.from_user.id = 100
+    callback.bot.set_my_commands = AsyncMock()
     callback.message.edit_text = AsyncMock()
     callback.answer = AsyncMock()
     state = MagicMock()
@@ -42,18 +42,11 @@ async def test_admin_create_confirm_handler_notifies_new_admin_after_success():
     )
     state.clear = AsyncMock()
     admin_service = MagicMock()
-    admin_service.create_managed_admin = AsyncMock(
-        return_value=Admin(telegram_id=200)
-    )
+    admin_service.create_managed_admin = AsyncMock(return_value=Admin(telegram_id=200))
     notification_service = MagicMock()
     notification_service.admin_added = AsyncMock()
 
-    await admin_create_confirm_handler(
-        callback,
-        state,
-        admin_service,
-        notification_service,
-    )
+    await admin_create_confirm_handler(callback, state, admin_service, notification_service)
 
     admin_service.create_managed_admin.assert_awaited_once_with(
         actor_telegram_id=100,
@@ -61,6 +54,7 @@ async def test_admin_create_confirm_handler_notifies_new_admin_after_success():
         permission_keys={"support"},
     )
     notification_service.admin_added.assert_awaited_once_with(200)
+    callback.bot.set_my_commands.assert_awaited_once()
     state.clear.assert_awaited_once()
 
 
@@ -79,12 +73,7 @@ async def test_admin_create_confirm_handler_does_not_notify_when_creation_fails(
     notification_service = MagicMock()
     notification_service.admin_added = AsyncMock()
 
-    await admin_create_confirm_handler(
-        callback,
-        state,
-        admin_service,
-        notification_service,
-    )
+    await admin_create_confirm_handler(callback, state, admin_service, notification_service)
 
     notification_service.admin_added.assert_not_awaited()
     callback.answer.assert_awaited_once_with(
