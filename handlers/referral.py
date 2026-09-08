@@ -1,7 +1,6 @@
 from math import ceil
 
 from aiogram import F, Router
-from aiogram.filters.callback_data import CallbackData
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.deep_linking import create_start_link
 
