@@ -18,7 +18,7 @@ from handlers.admin_support import router as admin_support_router
 from handlers.admin_support_settings import router as admin_support_settings_router
 from handlers.admin_system_stats import router as admin_system_stats_router
 from handlers.edit_profile import router as edit_profile_router
-from handlers.errors import router as errors_router
+from handlers.errors import handle_error
 from handlers.force_subscription import router as force_subscription_router
 from handlers.profile import router as profile_router
 from handlers.register import router as register_router
@@ -58,6 +58,7 @@ async def main() -> None:
 
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher()
+    dp.errors.register(handle_error)
 
     database = Database(database_url=DATABASE_URL)
     system_service = SystemService(database=database)
@@ -74,7 +75,6 @@ async def main() -> None:
         dp.message.outer_middleware(AntiSpamMiddleware())
         dp.callback_query.outer_middleware(AntiSpamMiddleware())
 
-        dp.include_router(errors_router)
         dp.include_router(start_router)
         dp.include_router(register_router)
         dp.include_router(profile_router)
