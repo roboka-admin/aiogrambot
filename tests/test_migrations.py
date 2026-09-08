@@ -85,12 +85,19 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
         assert "0003_add_antispam_enabled -> 0004_add_force_subscription" in output
         assert "0004_add_force_subscription -> 0005_membership_events" in output
         assert "0005_membership_events -> 0006_admin_foundation" in output
+        assert "0006_admin_foundation -> 0007_add_referrals" in output
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
             tables = set((await session.execute(text("SHOW TABLES"))).scalars())
             revision = (
                 await session.execute(text("SELECT version_num FROM alembic_version"))
             ).scalar_one()
+            user_columns = {
+                row[0]
+                for row in (
+                    await session.execute(text("SHOW COLUMNS FROM users"))
+                ).all()
+            }
             settings_count = (
                 await session.execute(text("SELECT COUNT(*) FROM bot_settings WHERE id = 1"))
             ).scalar_one()
@@ -116,7 +123,12 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
             "admin_permission_assignments",
             "alembic_version",
         }.issubset(tables)
-        assert revision == "0006_admin_foundation"
+        assert {
+            "referral_code",
+            "referred_by_user_id",
+            "referral_processed_at",
+        }.issubset(user_columns)
+        assert revision == "0007_add_referrals"
         assert settings_count == 1
         assert antispam_enabled == 1
         assert force_subscription_enabled == 0
