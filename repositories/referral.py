@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.user import User
+from models.user import RegistrationStatus, User, UserStatus
 from models.user_db import UserRecord
 from repositories.interfaces.referral import IReferralRepository
 
@@ -94,8 +94,6 @@ class ReferralRepository(IReferralRepository):
 
     @staticmethod
     def _to_domain(record: UserRecord) -> User:
-        from models.user import RegistrationStatus, UserStatus
-
         return User(
             telegram_id=record.telegram_id,
             telegram_name=record.telegram_name,
