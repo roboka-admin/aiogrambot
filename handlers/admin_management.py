@@ -1,4 +1,4 @@
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -11,6 +11,7 @@ from callbacks.admin import (
     AdminPermissionCallback,
 )
 from core.admin_permissions import ADMIN_PERMISSION_REGISTRY
+from core.commands import remove_admin_commands, set_admin_commands
 from exceptions.user import UserNotFoundError
 from filters.admin import AdminPermissionFilter
 from keyboards.admin_management import (
@@ -292,6 +293,7 @@ async def admin_create_confirm_handler(
         return
 
     await notification_service.admin_added(admin.telegram_id)
+    await set_admin_commands(callback.bot, admin.telegram_id)
     await state.clear()
     await callback.message.edit_text(
         f"✅ ادمین {admin.telegram_id} با موفقیت اضافه شد.",
@@ -322,6 +324,7 @@ async def admin_deactivate_handler(
         show_alert=not changed,
     )
     if changed:
+        await remove_admin_commands(callback.bot, callback_data.telegram_id)
         admin = await admin_service.get_admin(callback_data.telegram_id)
         if admin:
             await callback.message.edit_reply_markup(reply_markup=admin_detail_keyboard(admin))
@@ -342,6 +345,7 @@ async def admin_activate_handler(
         show_alert=not changed,
     )
     if changed:
+        await set_admin_commands(callback.bot, callback_data.telegram_id)
         admin = await admin_service.get_admin(callback_data.telegram_id)
         if admin:
             await callback.message.edit_reply_markup(reply_markup=admin_detail_keyboard(admin))
@@ -362,6 +366,7 @@ async def admin_delete_handler(
         show_alert=not removed,
     )
     if removed:
+        await remove_admin_commands(callback.bot, callback_data.telegram_id)
         admins = list(await admin_service.list_admins())
         await callback.message.edit_text(
             "👥 فهرست ادمین‌ها",
