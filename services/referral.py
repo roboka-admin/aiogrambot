@@ -1,9 +1,11 @@
 import re
 import secrets
+from math import ceil
 
-from core.transaction import TransactionManager, transactional
+from core.timezone import tehran_now
+from core.transaction import NullTransactionManager, TransactionManager, transactional
 from exceptions.user import UserNotFoundError
-from models.user import UserStatus
+from models.user import User, UserStatus
 from repositories.interfaces.referral import IReferralRepository
 
 
@@ -15,11 +17,12 @@ class ReferralService:
 
     def __init__(
         self,
+        *,
         referral_repository: IReferralRepository,
         transaction_manager: TransactionManager | None = None,
     ) -> None:
         self._referral_repository = referral_repository
-        self._transaction_manager = transaction_manager
+        self._transaction_manager = transaction_manager or NullTransactionManager()
 
     @transactional
     async def ensure_referral_code(self, telegram_id: int) -> str:
@@ -41,9 +44,10 @@ class ReferralService:
     async def process_start(
         self, *, telegram_id: int, referral_code: str | None
     ) -> bool:
+        processed_at = tehran_now()
         if referral_code is None or not _REFERRAL_CODE_PATTERN.fullmatch(referral_code):
             await self._referral_repository.mark_referral_processed(
-                telegram_id, self._now()
+                telegram_id, processed_at
             )
             return False
 
@@ -52,33 +56,35 @@ class ReferralService:
         )
         if referrer is None or referrer.telegram_id == telegram_id:
             await self._referral_repository.mark_referral_processed(
-                telegram_id, self._now()
+                telegram_id, processed_at
             )
             return False
 
         if referrer.status is not UserStatus.ACTIVE:
             await self._referral_repository.mark_referral_processed(
-                telegram_id, self._now()
+                telegram_id, processed_at
             )
             return False
 
         return await self._referral_repository.claim_referral(
             telegram_id,
             referrer.telegram_id,
-            self._now(),
+            processed_at,
         )
 
+    @transactional
     async def get_referral_count(self, telegram_id: int) -> int:
         return await self._referral_repository.count_referrals(telegram_id)
 
+    @transactional
     async def get_referrals_page(
         self, *, telegram_id: int, page: int = 1, page_size: int = 10
-    ) -> tuple[list, int, int]:
+    ) -> tuple[list[User], int, int]:
         if page_size <= 0:
             raise ValueError("page_size must be positive")
 
         total = await self._referral_repository.count_referrals(telegram_id)
-        total_pages = max(1, (total + page_size - 1) // page_size)
+        total_pages = max(1, ceil(total / page_size))
         page = min(max(1, page), total_pages)
         offset = (page - 1) * page_size
         users = await self._referral_repository.list_referrals(
@@ -87,9 +93,3 @@ class ReferralService:
             limit=page_size,
         )
         return users, total, page
-
-    @staticmethod
-    def _now():
-        from core.timezone import tehran_now
-
-        return tehran_now()
