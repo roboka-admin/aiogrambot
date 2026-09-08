@@ -23,6 +23,7 @@ from handlers.admin_system_stats import router as admin_system_stats_router
 from handlers.edit_profile import router as edit_profile_router
 from handlers.force_subscription import router as force_subscription_router
 from handlers.profile import router as profile_router
+from handlers.referral import router as referral_router
 from handlers.register import router as register_router
 from handlers.start import router as start_router
 from handlers.support import router as support_router
@@ -89,6 +90,7 @@ async def main() -> None:
             start_router,
             register_router,
             profile_router,
+            referral_router,
             support_router,
             edit_profile_router,
             force_subscription_router,
