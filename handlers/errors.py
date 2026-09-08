@@ -1,17 +1,14 @@
 import logging
 from typing import cast
 
-from aiogram import Router
 from aiogram.types import ErrorEvent, Message
 
 
-router = Router()
 logger = logging.getLogger(__name__)
 
 ERROR_MESSAGE = "❌ خطایی غیرمنتظره رخ داد. لطفاً دوباره تلاش کنید."
 
 
-@router.error()
 async def handle_error(event: ErrorEvent) -> None:
     """Log an unhandled update exception and show a safe fallback to the user."""
     exception = event.exception
