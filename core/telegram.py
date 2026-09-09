@@ -85,12 +85,16 @@ async def edit_message_if_changed(
     message: Message | None,
     text: str,
     reply_markup: InlineKeyboardMarkup | None = None,
+    parse_mode: str | None = None,
 ) -> bool:
     """Edit a Telegram message only when its content or markup has changed.
 
     Returns True when an edit was performed and False when no edit was needed.
     A narrow guard handles the race where Telegram reports that the message
     became identical between our local comparison and the API request.
+    ``parse_mode`` is passed through to Telegram so callers may use HTML;
+    note that the local equality check then always misses (Telegram returns
+    the rendered text), which the "message is not modified" guard absorbs.
     """
     if message is None:
         return False
@@ -99,7 +103,9 @@ async def edit_message_if_changed(
         return False
 
     try:
-        await message.edit_text(text, reply_markup=reply_markup)
+        await message.edit_text(
+            text, reply_markup=reply_markup, parse_mode=parse_mode
+        )
     except AiogramError as exc:
         if "message is not modified" not in str(exc).lower():
             raise
