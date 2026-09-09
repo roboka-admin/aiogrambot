@@ -17,6 +17,18 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Databases created before the schema declared BIGINT ids still carry an
+    # INT primary key. MySQL refuses a foreign key between INT and BIGINT
+    # columns, so the referrer FK below would fail on them. Widening first is
+    # a no-op where telegram_id is already BIGINT.
+    op.alter_column(
+        "users",
+        "telegram_id",
+        existing_type=sa.Integer(),
+        type_=sa.BigInteger(),
+        existing_nullable=False,
+    )
+
     op.add_column(
         "users",
         sa.Column("referral_code", sa.String(length=64), nullable=True),
@@ -58,6 +70,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # telegram_id is intentionally left as BIGINT: narrowing back to INT could
+    # truncate real Telegram ids and BIGINT is what the model always declared.
     op.drop_constraint("fk_users_referred_by_user_id", "users", type_="foreignkey")
     op.drop_index("ix_users_referral_code", table_name="users")
     op.drop_column("users", "referral_processed_at")

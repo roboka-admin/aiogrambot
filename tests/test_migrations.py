@@ -48,9 +48,18 @@ async def _reset_test_database(connection) -> None:
         await connection.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
 
 
-@pytest.mark.asyncio
-async def test_initial_migration_builds_test_database_from_empty_schema() -> None:
-    """Verify the real Alembic migration chain can build the dedicated test DB from scratch."""
+def _run_alembic_upgrade(revision: str) -> str:
+    """Upgrade the dedicated test database and return Alembic's combined output."""
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "-x", "database=test", "upgrade", revision],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout + result.stderr
+
+
+def _get_test_database_url() -> str:
     database_url = os.getenv("TEST_DATABASE_URL")
     if not database_url:
         raise RuntimeError("TEST_DATABASE_URL is not configured")
@@ -58,27 +67,18 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
     if not database_url.startswith("mysql+asyncmy://"):
         raise RuntimeError("TEST_DATABASE_URL must use mysql+asyncmy://")
 
-    engine = create_async_engine(database_url, pool_pre_ping=True)
+    return database_url
+
+
+@pytest.mark.asyncio
+async def test_initial_migration_builds_test_database_from_empty_schema() -> None:
+    """Verify the real Alembic migration chain can build the dedicated test DB from scratch."""
+    engine = create_async_engine(_get_test_database_url(), pool_pre_ping=True)
     try:
         async with engine.begin() as connection:
             await _reset_test_database(connection)
 
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "alembic",
-                "-x",
-                "database=test",
-                "upgrade",
-                "head",
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-
-        output = result.stdout + result.stderr
+        output = _run_alembic_upgrade("head")
         assert "Running upgrade  -> 0001_initial_schema" in output
         assert "0001_initial_schema -> 0002_add_bot_settings" in output
         assert "0002_add_bot_settings -> 0003_add_antispam_enabled" in output
@@ -132,5 +132,61 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
         assert settings_count == 1
         assert antispam_enabled == 1
         assert force_subscription_enabled == 0
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_referral_migration_widens_legacy_int_telegram_id() -> None:
+    """Databases created with an INT users.telegram_id must still reach 0007.
+
+    MySQL rejects a foreign key between INT and BIGINT columns, so without the
+    widening step 0007 used to fail on the referrer FK and leave the schema
+    half-migrated.
+    """
+    engine = create_async_engine(_get_test_database_url(), pool_pre_ping=True)
+    try:
+        async with engine.begin() as connection:
+            await _reset_test_database(connection)
+
+        _run_alembic_upgrade("0006_admin_foundation")
+
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("ALTER TABLE users MODIFY telegram_id INT NOT NULL")
+            )
+
+        output = _run_alembic_upgrade("head")
+        assert "0006_admin_foundation -> 0007_add_referrals" in output
+
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            telegram_id_type = (
+                await session.execute(
+                    text(
+                        "SELECT DATA_TYPE FROM information_schema.COLUMNS "
+                        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' "
+                        "AND COLUMN_NAME = 'telegram_id'"
+                    )
+                )
+            ).scalar_one()
+            foreign_keys = set(
+                (
+                    await session.execute(
+                        text(
+                            "SELECT CONSTRAINT_NAME "
+                            "FROM information_schema.TABLE_CONSTRAINTS "
+                            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' "
+                            "AND CONSTRAINT_TYPE = 'FOREIGN KEY'"
+                        )
+                    )
+                ).scalars()
+            )
+            revision = (
+                await session.execute(text("SELECT version_num FROM alembic_version"))
+            ).scalar_one()
+
+        assert telegram_id_type.lower() == "bigint"
+        assert "fk_users_referred_by_user_id" in foreign_keys
+        assert revision == "0007_add_referrals"
     finally:
         await engine.dispose()
