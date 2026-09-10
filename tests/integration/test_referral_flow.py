@@ -9,6 +9,7 @@ from handlers.referral import referral_back_handler, referral_handler, referral_
 from handlers.start import start_handler
 from keyboards.referral import referral_keyboard, referral_list_keyboard
 from models.user import RegistrationStatus, User
+from services.referral import ReferralRewardProgress
 
 
 @pytest.mark.asyncio
@@ -20,6 +21,15 @@ async def test_start_handler_processes_referral_payload_for_new_user():
     referral_service = MagicMock()
     referral_service.process_start = AsyncMock(return_value=7)
     referral_service.get_referral_count = AsyncMock(return_value=3)
+    referral_service.get_reward_progress = AsyncMock(
+        return_value=ReferralRewardProgress(
+            registered_referrals=1,
+            total_coins_earned=1,
+            invites_until_next_reward=1,
+            reward_coins=1,
+            reward_per_invites=1,
+        )
+    )
     notification_service = MagicMock()
     notification_service.referral_joined = AsyncMock()
 
@@ -102,6 +112,15 @@ async def test_referral_handler_creates_link_and_shows_statistics():
     referral_service = MagicMock()
     referral_service.ensure_referral_code = AsyncMock(return_value="ref_abc")
     referral_service.get_referral_count = AsyncMock(return_value=7)
+    referral_service.get_reward_progress = AsyncMock(
+        return_value=ReferralRewardProgress(
+            registered_referrals=4,
+            total_coins_earned=6,
+            invites_until_next_reward=2,
+            reward_coins=5,
+            reward_per_invites=3,
+        )
+    )
 
     with patch(
         "handlers.referral.create_start_link",
@@ -119,6 +138,10 @@ async def test_referral_handler_creates_link_and_shows_statistics():
     assert "7" in text
     # The link must be copy-friendly (monospace) and the message rendered as HTML.
     assert "<code>https://t.me/test_bot?start=ref_abc</code>" in text
+    # Reward rule and progress are surfaced so users know what they earn.
+    assert "هر <b>3</b> دعوت ثبت‌نام‌شده = <b>5</b> سکه" in text
+    assert "سکه‌های کسب‌شده از دعوت: <b>6</b>" in text
+    assert "تا پاداش بعدی: <b>2</b>" in text
     assert message.answer.await_args.kwargs["parse_mode"] == "HTML"
 
 
@@ -197,6 +220,15 @@ async def test_referral_back_handler_returns_to_main_screen():
     referral_service = MagicMock()
     referral_service.ensure_referral_code = AsyncMock(return_value="ref_abc")
     referral_service.get_referral_count = AsyncMock(return_value=3)
+    referral_service.get_reward_progress = AsyncMock(
+        return_value=ReferralRewardProgress(
+            registered_referrals=1,
+            total_coins_earned=1,
+            invites_until_next_reward=1,
+            reward_coins=1,
+            reward_per_invites=1,
+        )
+    )
 
     with patch(
         "handlers.referral.create_start_link",
@@ -207,6 +239,7 @@ async def test_referral_back_handler_returns_to_main_screen():
 
     text = callback.message.edit_text.await_args.args[0]
     assert "<code>https://t.me/test_bot?start=ref_abc</code>" in text
+    assert "هر دعوت ثبت‌نام‌شده = <b>1</b> سکه" in text
     assert "3" in text
     assert callback.message.edit_text.await_args.kwargs["parse_mode"] == "HTML"
     callback.answer.assert_awaited_once()

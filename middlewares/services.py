@@ -15,6 +15,7 @@ from repositories.broadcast import BroadcastRepository
 from repositories.force_subscription import ForceSubscriptionRepository
 from repositories.force_subscription_event import ForceSubscriptionEventRepository
 from repositories.referral import ReferralRepository
+from repositories.referral_reward import ReferralRewardRepository
 from repositories.support import SupportRepository
 from repositories.user import UserRepository
 from services.admin import AdminService
@@ -54,6 +55,7 @@ class ServicesMiddleware(BaseMiddleware):
             force_subscription_event_repository = ForceSubscriptionEventRepository(session)
             admin_repository = AdminRepository(session)
             referral_repository = ReferralRepository(session)
+            referral_reward_repository = ReferralRewardRepository(session)
             telegram_gateway = AiogramTelegramGateway(data["bot"])
 
             @asynccontextmanager
@@ -104,6 +106,7 @@ class ServicesMiddleware(BaseMiddleware):
             )
             referral_service = ReferralService(
                 referral_repository=referral_repository,
+                referral_reward_repository=referral_reward_repository,
                 bot_settings_repository=bot_settings_repository,
                 transaction_manager=transaction_manager,
             )

@@ -27,6 +27,7 @@ def _enter_service_patches(stack: ExitStack) -> dict[str, MagicMock]:
         "ForceSubscriptionEventRepository",
         "AdminRepository",
         "ReferralRepository",
+        "ReferralRewardRepository",
         "AiogramTelegramGateway",
         "RegisterService",
         "UserService",
@@ -117,6 +118,7 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     )
     mocks["ReferralService"].assert_called_once_with(
         referral_repository=mocks["ReferralRepository"].return_value,
+        referral_reward_repository=mocks["ReferralRewardRepository"].return_value,
         bot_settings_repository=mocks["BotSettingsRepository"].return_value,
         transaction_manager=transaction_manager,
     )

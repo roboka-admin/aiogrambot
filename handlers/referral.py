@@ -10,7 +10,7 @@ from core.telegram import edit_message_if_changed
 from keyboards.referral import referral_keyboard, referral_list_keyboard
 from middlewares.registration import RegistrationRequiredMiddleware
 from models.user import RegistrationStatus, User
-from services.referral import ReferralService
+from services.referral import ReferralRewardProgress, ReferralService
 
 
 _REFERRAL_PAGE_SIZE = 10
@@ -20,17 +20,30 @@ router.message.middleware(RegistrationRequiredMiddleware())
 router.callback_query.middleware(RegistrationRequiredMiddleware())
 
 
-def _referral_screen_text(*, referral_link: str, count: int) -> str:
+def _referral_screen_text(
+    *, referral_link: str, count: int, progress: ReferralRewardProgress
+) -> str:
     """Build the main referral screen.
 
     The link is wrapped in <code> so Telegram clients offer tap-to-copy,
     and every dynamic value is HTML-escaped before being interpolated.
     """
+    if progress.reward_per_invites == 1:
+        rule = f"هر دعوت ثبت‌نام‌شده = <b>{progress.reward_coins}</b> سکه"
+    else:
+        rule = (
+            f"هر <b>{progress.reward_per_invites}</b> دعوت ثبت‌نام‌شده"
+            f" = <b>{progress.reward_coins}</b> سکه"
+        )
     return (
         "👥 <b>دعوت دوستان</b>\n\n"
         "🔗 لینک اختصاصی شما:\n"
         f"<code>{escape(referral_link)}</code>\n\n"
-        f"📊 دعوت‌های موفق شما: <b>{count}</b>\n\n"
+        f"📊 دعوت‌های موفق شما: <b>{count}</b>\n"
+        f"✅ ثبت‌نام‌شده: <b>{progress.registered_referrals}</b>\n"
+        f"🪙 سکه‌های کسب‌شده از دعوت: <b>{progress.total_coins_earned}</b>\n\n"
+        f"🎁 {rule}\n"
+        f"⏳ تا پاداش بعدی: <b>{progress.invites_until_next_reward}</b> دعوت ثبت‌نام‌شده\n\n"
         "💡 لینک را برای دوستانتان بفرستید؛ با شروع ربات از طریق این لینک،"
         " دعوت شما ثبت می‌شود."
     )
@@ -38,12 +51,13 @@ def _referral_screen_text(*, referral_link: str, count: int) -> str:
 
 async def _referral_screen_data(
     bot: Bot, user: User, referral_service: ReferralService
-) -> tuple[str, int]:
-    """Fetch everything the main referral screen needs (link + count)."""
+) -> tuple[str, int, ReferralRewardProgress]:
+    """Fetch everything the main referral screen needs (link, count, rewards)."""
     code = await referral_service.ensure_referral_code(user.telegram_id)
     count = await referral_service.get_referral_count(user.telegram_id)
+    progress = await referral_service.get_reward_progress(user.telegram_id)
     referral_link = await create_start_link(bot, code)
-    return referral_link, count
+    return referral_link, count, progress
 
 
 @router.message(F.text == "👥 دعوت دوستان")
@@ -52,12 +66,14 @@ async def referral_handler(
     user: User,
     referral_service: ReferralService,
 ) -> None:
-    referral_link, count = await _referral_screen_data(
+    referral_link, count, progress = await _referral_screen_data(
         message.bot, user, referral_service
     )
 
     await message.answer(
-        _referral_screen_text(referral_link=referral_link, count=count),
+        _referral_screen_text(
+            referral_link=referral_link, count=count, progress=progress
+        ),
         reply_markup=referral_keyboard(
             referral_link=referral_link,
             has_referrals=count > 0,
@@ -73,14 +89,16 @@ async def referral_back_handler(
     referral_service: ReferralService,
 ) -> None:
     """Return from the referral list to the main referral screen."""
-    referral_link, count = await _referral_screen_data(
+    referral_link, count, progress = await _referral_screen_data(
         callback.bot, user, referral_service
     )
 
     if callback.message:
         await edit_message_if_changed(
             message=callback.message,
-            text=_referral_screen_text(referral_link=referral_link, count=count),
+            text=_referral_screen_text(
+                referral_link=referral_link, count=count, progress=progress
+            ),
             reply_markup=referral_keyboard(
                 referral_link=referral_link,
                 has_referrals=count > 0,

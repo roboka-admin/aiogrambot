@@ -12,6 +12,7 @@ from models.bot_settings_db import BotSettingsRecord
 from models.broadcast_db import BroadcastRecordRecord
 from models.force_subscription_db import ForceSubscriptionMembershipEventRecord
 from models.force_subscription_db import ForceSubscriptionTargetRecord
+from models.referral_reward_db import ReferralRewardRecord
 from models.support_db import SupportTicketRecord
 from models.user_db import UserRecord
 

@@ -1,5 +1,6 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from callbacks.admin import AdminReferralRewardCallback
 from models.bot_settings import BotSettings
 
 
@@ -25,7 +26,7 @@ def admin_settings_keyboard(settings: BotSettings) -> InlineKeyboardMarkup:
                         f"🎁 پاداش دعوت: {settings.referral_reward_coins} سکه"
                         f" / {settings.referral_reward_per_invites} دعوت"
                     ),
-                    callback_data="admin_settings_referral_reward",
+                    callback_data=AdminReferralRewardCallback(action="open").pack(),
                 ),
             ],
         ]

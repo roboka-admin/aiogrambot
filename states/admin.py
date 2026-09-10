@@ -12,8 +12,7 @@ class AdminBroadcastStates(StatesGroup):
 
 
 class AdminSettingsStates(StatesGroup):
-    waiting_for_referral_reward_coins = State()
-    waiting_for_referral_reward_per_invites = State()
+    waiting_for_referral_reward = State()
 
 
 class AdminForceSubscriptionStates(StatesGroup):

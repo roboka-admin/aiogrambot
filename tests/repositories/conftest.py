@@ -7,6 +7,7 @@ from models.antispam_db import AntiSpamEventRecord
 from models.base import Base
 from models.bot_settings_db import BotSettingsRecord
 from models.broadcast_db import BroadcastRecordRecord
+from models.referral_reward_db import ReferralRewardRecord
 from models.support_db import SupportTicketRecord
 from models.user_db import UserRecord
 
@@ -16,6 +17,7 @@ _ = (
     BroadcastRecordRecord,
     AntiSpamEventRecord,
     BotSettingsRecord,
+    ReferralRewardRecord,
 )
 
 

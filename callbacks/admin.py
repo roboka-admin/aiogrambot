@@ -83,3 +83,16 @@ class AdminCreateConfirmCallback(CallbackData, prefix="admin_create_confirm"):
 
 class AdminCreateCancelCallback(CallbackData, prefix="admin_create_cancel"):
     pass
+
+
+class AdminReferralRewardCallback(CallbackData, prefix="admin_referral_reward"):
+    """Actions on the referral reward screen.
+
+    action: "open" | "coins" | "invites" | "preset" | "manual" | "history" | "back"
+    delta: signed step for "coins"/"invites"; for "preset" coins are in
+    ``delta`` and invites in ``value``.
+    """
+
+    action: str
+    delta: int = 0
+    value: int = 0

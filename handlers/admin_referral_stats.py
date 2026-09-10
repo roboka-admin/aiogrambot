@@ -59,7 +59,10 @@ def _referral_stats_text(stats: dict[str, int | list[tuple[User, int]]]) -> str:
         "📅 فعالیت دعوت‌ها\n",
         f"📝 امروز: {stats['today']:,}",
         f"📝 ۷ روز اخیر: {stats['last_7_days']:,}",
-        f"📝 ۳۰ روز اخیر: {stats['last_30_days']:,}",
+        f"📝 ۳۰ روز اخیر: {stats['last_30_days']:,}\n",
+        "🪙 پاداش‌ها\n",
+        f"💸 پرداخت‌ها: {stats['rewards_paid']:,} (امروز: {stats['rewards_paid_today']:,})",
+        f"🪙 مجموع سکه پرداخت‌شده: {stats['coins_rewarded']:,}",
     ]
 
     top_referrers: list[tuple[User, int]] = stats["top_referrers"]

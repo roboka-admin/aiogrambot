@@ -32,12 +32,17 @@ async def test_referral_stats_handler_renders_funnel_activity_and_leaderboard():
                 (User(telegram_id=1, telegram_name="Ali"), 12),
                 (User(telegram_id=2, telegram_name="Sara"), 7),
             ],
+            "rewards_paid": 5,
+            "rewards_paid_today": 1,
+            "coins_rewarded": 25,
         }
     )
 
     await referral_stats_handler(callback, referral_service)
 
     text = callback.message.edit_text.await_args.args[0]
+    assert "💸 پرداخت‌ها: 5 (امروز: 1)" in text
+    assert "مجموع سکه پرداخت‌شده: 25" in text
     assert "🎁 آمار دعوت‌ها" in text
     assert "کل دعوت‌های موفق: 42" in text
     assert "ثبت‌نام‌شده: 30" in text
@@ -67,6 +72,9 @@ async def test_referral_stats_handler_handles_zero_referrals_without_leaderboard
             "last_7_days": 0,
             "last_30_days": 0,
             "top_referrers": [],
+            "rewards_paid": 0,
+            "rewards_paid_today": 0,
+            "coins_rewarded": 0,
         }
     )
 
