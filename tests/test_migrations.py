@@ -86,6 +86,7 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
         assert "0004_add_force_subscription -> 0005_membership_events" in output
         assert "0005_membership_events -> 0006_admin_foundation" in output
         assert "0006_admin_foundation -> 0007_add_referrals" in output
+        assert "0007_add_referrals -> 0008_add_referral_pending_code" in output
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
             tables = set((await session.execute(text("SHOW TABLES"))).scalars())
@@ -127,8 +128,9 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
             "referral_code",
             "referred_by_user_id",
             "referral_processed_at",
+            "referral_pending_code",
         }.issubset(user_columns)
-        assert revision == "0007_add_referrals"
+        assert revision == "0008_add_referral_pending_code"
         assert settings_count == 1
         assert antispam_enabled == 1
         assert force_subscription_enabled == 0
@@ -187,6 +189,6 @@ async def test_referral_migration_widens_legacy_int_telegram_id() -> None:
 
         assert telegram_id_type.lower() == "bigint"
         assert "fk_users_referred_by_user_id" in foreign_keys
-        assert revision == "0007_add_referrals"
+        assert revision == "0008_add_referral_pending_code"
     finally:
         await engine.dispose()

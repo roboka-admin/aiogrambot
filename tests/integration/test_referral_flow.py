@@ -18,19 +18,25 @@ async def test_start_handler_processes_referral_payload_for_new_user():
     message.from_user.first_name = "New"
     message.answer = AsyncMock()
     referral_service = MagicMock()
-    referral_service.process_start = AsyncMock(return_value=True)
+    referral_service.process_start = AsyncMock(return_value=7)
+    referral_service.get_referral_count = AsyncMock(return_value=3)
+    notification_service = MagicMock()
+    notification_service.referral_joined = AsyncMock()
 
     await start_handler(
         message,
         user,
         CommandObject(command="start", args="ref_owner"),
         referral_service,
+        notification_service,
     )
 
     referral_service.process_start.assert_awaited_once_with(
         telegram_id=42,
         referral_code="ref_owner",
     )
+    referral_service.get_referral_count.assert_awaited_once_with(7)
+    notification_service.referral_joined.assert_awaited_once_with(7, "New", 3)
     message.answer.assert_awaited_once()
 
 
@@ -41,19 +47,23 @@ async def test_start_handler_consumes_plain_start_without_referral_payload():
     message.from_user.first_name = "New"
     message.answer = AsyncMock()
     referral_service = MagicMock()
-    referral_service.process_start = AsyncMock(return_value=False)
+    referral_service.process_start = AsyncMock(return_value=None)
+    notification_service = MagicMock()
+    notification_service.referral_joined = AsyncMock()
 
     await start_handler(
         message,
         user,
         CommandObject(command="start"),
         referral_service,
+        notification_service,
     )
 
     referral_service.process_start.assert_awaited_once_with(
         telegram_id=42,
         referral_code=None,
     )
+    notification_service.referral_joined.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -68,15 +78,19 @@ async def test_registered_user_does_not_attempt_to_claim_referral():
     message.answer = AsyncMock()
     referral_service = MagicMock()
     referral_service.process_start = AsyncMock()
+    notification_service = MagicMock()
+    notification_service.referral_joined = AsyncMock()
 
     await start_handler(
         message,
         user,
         CommandObject(command="start", args="ref_owner"),
         referral_service,
+        notification_service,
     )
 
     referral_service.process_start.assert_not_awaited()
+    notification_service.referral_joined.assert_not_awaited()
     message.answer.assert_awaited_once()
 
 

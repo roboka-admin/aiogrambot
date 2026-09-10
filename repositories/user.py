@@ -29,6 +29,7 @@ class UserRepository(IUserRepository):
             referral_code=user.referral_code,
             referred_by_user_id=user.referred_by_user_id,
             referral_processed_at=user.referral_processed_at,
+            referral_pending_code=user.referral_pending_code,
         )
         self._session.add(record)
         await self._session.flush()
@@ -64,6 +65,7 @@ class UserRepository(IUserRepository):
         record.referral_code = user.referral_code
         record.referred_by_user_id = user.referred_by_user_id
         record.referral_processed_at = user.referral_processed_at
+        record.referral_pending_code = user.referral_pending_code
         await self._session.flush()
         return self._to_domain(record)
 
@@ -182,4 +184,5 @@ class UserRepository(IUserRepository):
             referral_code=record.referral_code,
             referred_by_user_id=record.referred_by_user_id,
             referral_processed_at=record.referral_processed_at,
+            referral_pending_code=record.referral_pending_code,
         )

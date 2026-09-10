@@ -35,6 +35,7 @@ class FakeReferralRepository:
             return False
         user.referred_by_user_id = referrer_id
         user.referral_processed_at = processed_at
+        user.referral_pending_code = None
         return True
 
     async def mark_referral_processed(self, telegram_id: int, processed_at) -> bool:
@@ -42,6 +43,22 @@ class FakeReferralRepository:
         if user.referral_processed_at is not None:
             return False
         user.referral_processed_at = processed_at
+        user.referral_pending_code = None
+        return True
+
+    async def get_pending_referral_code(self, telegram_id: int) -> str | None:
+        user = self.users.get(telegram_id)
+        return user.referral_pending_code if user else None
+
+    async def save_pending_referral_code(self, telegram_id: int, code: str) -> bool:
+        user = self.users[telegram_id]
+        if (
+            user.referred_by_user_id is not None
+            or user.referral_processed_at is not None
+            or user.referral_pending_code is not None
+        ):
+            return False
+        user.referral_pending_code = code
         return True
 
     async def count_referrals(self, telegram_id: int) -> int:
@@ -132,15 +149,15 @@ async def test_start_referral_claims_only_new_user_once(service_and_repository):
 
     assert await service.process_start(
         telegram_id=2, referral_code=VALID_REFERRAL_CODE
-    ) is True
+    ) == 1
     assert repository.users[2].referred_by_user_id == 1
     assert repository.users[2].referral_processed_at is not None
     assert await service.process_start(
         telegram_id=2, referral_code=VALID_REFERRAL_CODE
-    ) is False
+    ) is None
     assert await service.process_start(
         telegram_id=2, referral_code=OTHER_REFERRAL_CODE
-    ) is False
+    ) is None
 
 
 @pytest.mark.asyncio
@@ -151,12 +168,12 @@ async def test_invalid_or_missing_referral_is_consumed_without_assignment(
     service, repository = service_and_repository
     repository.users[2] = make_user(2)
 
-    assert await service.process_start(telegram_id=2, referral_code=referral_code) is False
+    assert await service.process_start(telegram_id=2, referral_code=referral_code) is None
     assert repository.users[2].referred_by_user_id is None
     assert repository.users[2].referral_processed_at is not None
     assert await service.process_start(
         telegram_id=2, referral_code=VALID_REFERRAL_CODE
-    ) is False
+    ) is None
 
 
 @pytest.mark.asyncio
@@ -167,9 +184,84 @@ async def test_self_referral_is_rejected_and_locked(service_and_repository):
 
     assert await service.process_start(
         telegram_id=1, referral_code=SELF_REFERRAL_CODE
-    ) is False
+    ) is None
     assert repository.users[1].referred_by_user_id is None
     assert repository.users[1].referral_processed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_pending_referral_is_claimed_only_after_membership(service_and_repository):
+    service, repository = service_and_repository
+    repository.users[1] = make_user(1, VALID_REFERRAL_CODE)
+    repository.codes[VALID_REFERRAL_CODE] = 1
+    repository.users[2] = make_user(2)
+
+    # A blocked /start only stashes the invite; nothing is attributed yet.
+    assert await service.save_pending_referral(
+        telegram_id=2, referral_code=VALID_REFERRAL_CODE
+    ) is True
+    assert repository.users[2].referred_by_user_id is None
+    assert repository.users[2].referral_processed_at is None
+
+    # First invite wins: a second payload must not replace the pending one.
+    assert await service.save_pending_referral(
+        telegram_id=2, referral_code=OTHER_REFERRAL_CODE
+    ) is False
+    assert repository.users[2].referral_pending_code == VALID_REFERRAL_CODE
+
+    # Membership verification claims the stashed invite.
+    assert await service.claim_pending_referral(telegram_id=2) == 1
+    assert repository.users[2].referred_by_user_id == 1
+    assert repository.users[2].referral_processed_at is not None
+    assert repository.users[2].referral_pending_code is None
+    assert await service.claim_pending_referral(telegram_id=2) is None
+
+
+@pytest.mark.asyncio
+async def test_claim_pending_without_stash_leaves_future_start_eligible(
+    service_and_repository,
+):
+    service, repository = service_and_repository
+    repository.users[1] = make_user(1, VALID_REFERRAL_CODE)
+    repository.codes[VALID_REFERRAL_CODE] = 1
+    repository.users[2] = make_user(2)
+
+    assert await service.claim_pending_referral(telegram_id=2) is None
+    assert repository.users[2].referral_processed_at is None
+
+    # A later /start with an invite can still claim.
+    assert await service.process_start(
+        telegram_id=2, referral_code=VALID_REFERRAL_CODE
+    ) == 1
+
+
+@pytest.mark.asyncio
+async def test_process_start_prefers_pending_over_new_payload(service_and_repository):
+    service, repository = service_and_repository
+    repository.users[1] = make_user(1, VALID_REFERRAL_CODE)
+    repository.codes[VALID_REFERRAL_CODE] = 1
+    repository.users[5] = make_user(5, OTHER_REFERRAL_CODE)
+    repository.codes[OTHER_REFERRAL_CODE] = 5
+    repository.users[2] = make_user(2)
+    repository.users[2].referral_pending_code = VALID_REFERRAL_CODE
+
+    # A re-sent /start after joining must claim the original invite.
+    assert await service.process_start(
+        telegram_id=2, referral_code=OTHER_REFERRAL_CODE
+    ) == 1
+    assert repository.users[2].referred_by_user_id == 1
+
+
+@pytest.mark.asyncio
+async def test_save_pending_rejects_malformed_codes(service_and_repository):
+    service, repository = service_and_repository
+    repository.users[2] = make_user(2)
+
+    for bad_code in (None, "", "ref_owner", "not-a-code"):
+        assert await service.save_pending_referral(
+            telegram_id=2, referral_code=bad_code
+        ) is False
+    assert repository.users[2].referral_pending_code is None
 
 
 @pytest.mark.asyncio

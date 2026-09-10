@@ -53,6 +53,7 @@ class ReferralRepository(IReferralRepository):
             .values(
                 referred_by_user_id=referrer_id,
                 referral_processed_at=processed_at,
+                referral_pending_code=None,
             )
         )
         await self._session.flush()
@@ -67,7 +68,36 @@ class ReferralRepository(IReferralRepository):
                 UserRecord.telegram_id == telegram_id,
                 UserRecord.referral_processed_at.is_(None),
             )
-            .values(referral_processed_at=processed_at)
+            .values(
+                referral_processed_at=processed_at,
+                referral_pending_code=None,
+            )
+        )
+        await self._session.flush()
+        return result.rowcount == 1
+
+    async def get_pending_referral_code(self, telegram_id: int) -> str | None:
+        result = await self._session.execute(
+            select(UserRecord.referral_pending_code).where(
+                UserRecord.telegram_id == telegram_id
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def save_pending_referral_code(
+        self, telegram_id: int, code: str
+    ) -> bool:
+        # First invite wins: keep an existing pending code, and never store
+        # anything once the referral decision for this user is final.
+        result = await self._session.execute(
+            update(UserRecord)
+            .where(
+                UserRecord.telegram_id == telegram_id,
+                UserRecord.referred_by_user_id.is_(None),
+                UserRecord.referral_processed_at.is_(None),
+                UserRecord.referral_pending_code.is_(None),
+            )
+            .values(referral_pending_code=code)
         )
         await self._session.flush()
         return result.rowcount == 1
@@ -170,4 +200,5 @@ class ReferralRepository(IReferralRepository):
             referral_code=record.referral_code,
             referred_by_user_id=record.referred_by_user_id,
             referral_processed_at=record.referral_processed_at,
+            referral_pending_code=record.referral_pending_code,
         )

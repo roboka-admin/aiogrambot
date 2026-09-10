@@ -33,3 +33,4 @@ class User:
     referral_code: str | None = None
     referred_by_user_id: int | None = None
     referral_processed_at: datetime | None = None
+    referral_pending_code: str | None = None

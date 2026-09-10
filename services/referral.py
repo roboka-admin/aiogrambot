@@ -44,13 +44,68 @@ class ReferralService:
     @transactional
     async def process_start(
         self, *, telegram_id: int, referral_code: str | None
+    ) -> int | None:
+        """Attribute a /start to its referrer and return the referrer id.
+
+        When force-subscription blocked an earlier /start, its payload waits
+        in ``referral_pending_code``. The pending code wins over a new payload
+        (first invite wins) so a re-sent /start after joining cannot lose or
+        replace the original invitation.
+        """
+        pending_code = await self._referral_repository.get_pending_referral_code(
+            telegram_id
+        )
+        effective_code = pending_code or referral_code
+        return await self._claim_code(
+            telegram_id=telegram_id,
+            referral_code=effective_code,
+        )
+
+    @transactional
+    async def save_pending_referral(
+        self, *, telegram_id: int, referral_code: str | None
     ) -> bool:
+        """Stash a blocked /start payload until membership is verified.
+
+        Only well-formed codes are stored; validation of the referrer itself
+        (existence, self-invite, active status) happens at claim time because
+        the referrer may change between the block and the join.
+        """
+        if referral_code is None or not _REFERRAL_CODE_PATTERN.fullmatch(
+            referral_code.strip()
+        ):
+            return False
+        return await self._referral_repository.save_pending_referral_code(
+            telegram_id, referral_code.strip()
+        )
+
+    @transactional
+    async def claim_pending_referral(self, *, telegram_id: int) -> int | None:
+        """Claim the stashed invite after membership is verified.
+
+        Returns the referrer id on success, None otherwise. When nothing is
+        pending the referral decision is left untouched so a future /start
+        with an invite link can still claim.
+        """
+        pending_code = await self._referral_repository.get_pending_referral_code(
+            telegram_id
+        )
+        if pending_code is None:
+            return None
+        return await self._claim_code(
+            telegram_id=telegram_id,
+            referral_code=pending_code,
+        )
+
+    async def _claim_code(
+        self, *, telegram_id: int, referral_code: str | None
+    ) -> int | None:
         processed_at = tehran_now()
         if referral_code is None or not _REFERRAL_CODE_PATTERN.fullmatch(referral_code):
             await self._referral_repository.mark_referral_processed(
                 telegram_id, processed_at
             )
-            return False
+            return None
 
         referrer = await self._referral_repository.find_user_by_referral_code(
             referral_code
@@ -59,19 +114,20 @@ class ReferralService:
             await self._referral_repository.mark_referral_processed(
                 telegram_id, processed_at
             )
-            return False
+            return None
 
         if referrer.status is not UserStatus.ACTIVE:
             await self._referral_repository.mark_referral_processed(
                 telegram_id, processed_at
             )
-            return False
+            return None
 
-        return await self._referral_repository.claim_referral(
+        claimed = await self._referral_repository.claim_referral(
             telegram_id,
             referrer.telegram_id,
             processed_at,
         )
+        return referrer.telegram_id if claimed else None
 
     @transactional
     async def get_referral_count(self, telegram_id: int) -> int:

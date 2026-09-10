@@ -70,6 +70,18 @@ class NotificationService:
             "🛡 حساب شما به عنوان ادمین ربات فعال شد.",
         )
 
+    async def referral_joined(
+        self,
+        referrer_telegram_id: int,
+        new_user_name: str,
+        total_referrals: int,
+    ) -> None:
+        await self._send(
+            referrer_telegram_id,
+            f"🎉 کاربر {new_user_name} با لینک دعوت شما وارد ربات شد!\n"
+            f"📊 مجموع دعوت‌های شما: {total_referrals}",
+        )
+
     async def _send(self, telegram_id: int, text: str) -> None:
         try:
             await self._telegram_gateway.send_message(telegram_id, text)
