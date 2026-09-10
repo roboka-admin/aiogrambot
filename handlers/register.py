@@ -4,6 +4,7 @@ from aiogram.types import CallbackQuery, Message
 
 from core.telegram import edit_message_if_changed
 from exceptions.user import UserAlreadyExistsError
+from keyboards.menu import main_menu
 from keyboards.register import cancel_register
 from keyboards.start import start_keyboard
 from models.user import RegistrationStatus, User
@@ -58,7 +59,10 @@ async def process_age(message: Message, state: FSMContext, register_service: Reg
         await state.clear()
         return
     await state.clear()
-    await message.answer(f"✅ ثبت نام با موفقیت انجام شد.\n\n👤 نام: {user.name}\n🎂 سن: {user.age}")
+    await message.answer(
+        f"✅ ثبت نام با موفقیت انجام شد.\n\n👤 نام: {user.name}\n🎂 سن: {user.age}",
+        reply_markup=main_menu,
+    )
 
 
 @router.message(RegisterStates.waiting_age)
