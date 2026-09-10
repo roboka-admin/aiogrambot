@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import BigInteger
 
-from models.user import User
+from models.user import RegistrationStatus, User
 from models.user_db import UserRecord
 from services.referral import ReferralService
 
@@ -58,6 +58,37 @@ class FakeReferralRepository:
             if user.referred_by_user_id == telegram_id
         ]
         return users[offset : offset + limit]
+
+    async def count_referrals_total(self) -> int:
+        return sum(user.referred_by_user_id is not None for user in self.users.values())
+
+    async def count_referred_registered(self) -> int:
+        return sum(
+            user.referred_by_user_id is not None
+            and user.registration_status is RegistrationStatus.REGISTERED
+            for user in self.users.values()
+        )
+
+    async def count_users_with_referral_code(self) -> int:
+        return sum(user.referral_code is not None for user in self.users.values())
+
+    async def count_referrals_since(self, since) -> int:
+        return sum(
+            user.referred_by_user_id is not None
+            and user.referral_processed_at is not None
+            and user.referral_processed_at >= since
+            for user in self.users.values()
+        )
+
+    async def top_referrers(self, *, limit: int) -> list[tuple[User, int]]:
+        counts: dict[int, int] = {}
+        for user in self.users.values():
+            if user.referred_by_user_id is not None:
+                counts[user.referred_by_user_id] = (
+                    counts.get(user.referred_by_user_id, 0) + 1
+                )
+        ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:limit]
+        return [(self.users[referrer_id], count) for referrer_id, count in ranked]
 
 
 VALID_REFERRAL_CODE = "ref_" + "b" * 32
@@ -157,6 +188,54 @@ async def test_referral_statistics_are_paginated(service_and_repository):
     assert total == 3
     assert page == 2
     assert [user.telegram_id for user in users] == [4]
+
+
+@pytest.mark.asyncio
+async def test_get_referral_statistics_aggregates_funnel_and_top_referrers(
+    service_and_repository,
+):
+    service, repository = service_and_repository
+    repository.users[1] = make_user(1, VALID_REFERRAL_CODE)
+    repository.codes[VALID_REFERRAL_CODE] = 1
+    repository.users[2] = make_user(2, OTHER_REFERRAL_CODE)
+    repository.codes[OTHER_REFERRAL_CODE] = 2
+    repository.users[3] = make_user(3)
+    repository.users[4] = make_user(4)
+
+    # User 1 refers users 3 and 4; only user 3 goes on to register.
+    assert await service.process_start(telegram_id=3, referral_code=VALID_REFERRAL_CODE)
+    assert await service.process_start(telegram_id=4, referral_code=VALID_REFERRAL_CODE)
+    repository.users[3].registration_status = RegistrationStatus.REGISTERED
+
+    stats = await service.get_referral_statistics()
+
+    assert stats["total"] == 2
+    assert stats["registered"] == 1
+    assert stats["unregistered"] == 1
+    assert stats["users_with_code"] == 2
+    assert stats["today"] == 2
+    assert stats["last_7_days"] == 2
+    assert stats["last_30_days"] == 2
+    assert stats["top_referrers"] == [(repository.users[1], 2)]
+
+
+@pytest.mark.asyncio
+async def test_get_referral_statistics_returns_zeroes_when_nothing_happened(
+    service_and_repository,
+):
+    service, repository = service_and_repository
+    repository.users[1] = make_user(1)
+
+    stats = await service.get_referral_statistics()
+
+    assert stats["total"] == 0
+    assert stats["registered"] == 0
+    assert stats["unregistered"] == 0
+    assert stats["users_with_code"] == 0
+    assert stats["today"] == 0
+    assert stats["last_7_days"] == 0
+    assert stats["last_30_days"] == 0
+    assert stats["top_referrers"] == []
 
 
 def test_user_record_referral_fk_matches_telegram_id_type():

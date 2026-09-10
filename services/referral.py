@@ -1,5 +1,6 @@
 import re
 import secrets
+from datetime import timedelta
 from math import ceil
 
 from core.timezone import tehran_now
@@ -93,3 +94,37 @@ class ReferralService:
             limit=page_size,
         )
         return users, total, page
+
+    @transactional
+    async def get_referral_statistics(
+        self, *, top_referrers_limit: int = 5
+    ) -> dict[str, int | list[tuple[User, int]]]:
+        now = tehran_now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        seven_days_ago = today_start - timedelta(days=7)
+        thirty_days_ago = today_start - timedelta(days=30)
+
+        total = await self._referral_repository.count_referrals_total()
+        registered = await self._referral_repository.count_referred_registered()
+        return {
+            "total": total,
+            # Referred users are either registered or not, so the pending
+            # count is the complement and needs no query of its own.
+            "unregistered": total - registered,
+            "registered": registered,
+            "users_with_code": (
+                await self._referral_repository.count_users_with_referral_code()
+            ),
+            "today": await self._referral_repository.count_referrals_since(
+                today_start
+            ),
+            "last_7_days": await self._referral_repository.count_referrals_since(
+                seven_days_ago
+            ),
+            "last_30_days": await self._referral_repository.count_referrals_since(
+                thirty_days_ago
+            ),
+            "top_referrers": await self._referral_repository.top_referrers(
+                limit=top_referrers_limit
+            ),
+        }

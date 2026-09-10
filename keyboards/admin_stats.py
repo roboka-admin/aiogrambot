@@ -38,6 +38,10 @@ def stats_dashboard_keyboard() -> InlineKeyboardMarkup:
                     text="📌 آمار عضویت اجباری",
                     callback_data=AdminStatsCallback(section="force_subscription").pack(),
                 ),
+                InlineKeyboardButton(
+                    text="🎁 آمار دعوت‌ها",
+                    callback_data=AdminStatsCallback(section="referral").pack(),
+                ),
             ],
             [
                 InlineKeyboardButton(
@@ -80,6 +84,10 @@ def broadcast_stats_keyboard() -> InlineKeyboardMarkup:
 
 def antispam_stats_keyboard() -> InlineKeyboardMarkup:
     return _stats_page_keyboard("antispam")
+
+
+def referral_stats_keyboard() -> InlineKeyboardMarkup:
+    return _stats_page_keyboard("referral")
 
 
 def system_stats_keyboard() -> InlineKeyboardMarkup:

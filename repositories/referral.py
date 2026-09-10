@@ -80,6 +80,67 @@ class ReferralRepository(IReferralRepository):
         )
         return result.scalar_one()
 
+    async def count_referrals_total(self) -> int:
+        return await self._count_referred_where()
+
+    async def count_referred_registered(self) -> int:
+        return await self._count_referred_where(
+            UserRecord.registration_status == RegistrationStatus.REGISTERED.value
+        )
+
+    async def count_users_with_referral_code(self) -> int:
+        result = await self._session.execute(
+            select(func.count())
+            .select_from(UserRecord)
+            .where(UserRecord.referral_code.is_not(None))
+        )
+        return result.scalar_one()
+
+    async def count_referrals_since(self, since: datetime) -> int:
+        # referral_processed_at is set for every user's first /start, not only
+        # referred ones, so the claim filter is what turns this into a
+        # "referrals claimed in window" count.
+        return await self._count_referred_where(
+            UserRecord.referral_processed_at.is_not(None),
+            UserRecord.referral_processed_at >= since,
+        )
+
+    async def top_referrers(self, *, limit: int) -> list[tuple[User, int]]:
+        referral_counts = (
+            select(
+                UserRecord.referred_by_user_id.label("referrer_id"),
+                func.count().label("referral_count"),
+            )
+            .where(UserRecord.referred_by_user_id.is_not(None))
+            .group_by(UserRecord.referred_by_user_id)
+            .order_by(func.count().desc(), UserRecord.referred_by_user_id)
+            .limit(limit)
+            .subquery()
+        )
+        result = await self._session.execute(
+            select(UserRecord, referral_counts.c.referral_count)
+            .join(
+                referral_counts,
+                UserRecord.telegram_id == referral_counts.c.referrer_id,
+            )
+            .order_by(
+                referral_counts.c.referral_count.desc(),
+                UserRecord.telegram_id,
+            )
+        )
+        return [(self._to_domain(record), count) for record, count in result.all()]
+
+    async def _count_referred_where(self, *conditions) -> int:
+        statement = (
+            select(func.count())
+            .select_from(UserRecord)
+            .where(UserRecord.referred_by_user_id.is_not(None))
+        )
+        for condition in conditions:
+            statement = statement.where(condition)
+        result = await self._session.execute(statement)
+        return result.scalar_one()
+
     async def list_referrals(
         self, telegram_id: int, *, offset: int, limit: int
     ) -> list[User]:
