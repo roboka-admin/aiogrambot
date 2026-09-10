@@ -104,6 +104,7 @@ class ServicesMiddleware(BaseMiddleware):
             )
             referral_service = ReferralService(
                 referral_repository=referral_repository,
+                bot_settings_repository=bot_settings_repository,
                 transaction_manager=transaction_manager,
             )
 

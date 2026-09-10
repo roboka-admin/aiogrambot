@@ -8,6 +8,8 @@ from keyboards.menu import main_menu
 from keyboards.register import cancel_register
 from keyboards.start import start_keyboard
 from models.user import RegistrationStatus, User
+from services.notification import NotificationService
+from services.referral import ReferralService
 from services.register import RegisterService
 from states.register import RegisterStates
 from validators.register import validate_age, validate_name
@@ -47,7 +49,13 @@ async def invalid_name(message: Message) -> None:
 
 
 @router.message(RegisterStates.waiting_age, F.text)
-async def process_age(message: Message, state: FSMContext, register_service: RegisterService) -> None:
+async def process_age(
+    message: Message,
+    state: FSMContext,
+    register_service: RegisterService,
+    referral_service: ReferralService,
+    notification_service: NotificationService,
+) -> None:
     if not validate_age(message.text):
         await message.answer("❌ سن وارد شده معتبر نیست.")
         return
@@ -63,6 +71,19 @@ async def process_age(message: Message, state: FSMContext, register_service: Reg
         f"✅ ثبت نام با موفقیت انجام شد.\n\n👤 نام: {user.name}\n🎂 سن: {user.age}",
         reply_markup=main_menu,
     )
+
+    # Registration is what earns the referrer their reward (not the /start),
+    # so the threshold check happens here, after the user is persisted.
+    reward = await referral_service.reward_referrer_for_registration(
+        registered_user=user
+    )
+    if reward is not None:
+        await notification_service.referral_reward_earned(
+            reward.referrer_id,
+            reward.coins,
+            reward.balance,
+            reward.registered_referrals,
+        )
 
 
 @router.message(RegisterStates.waiting_age)

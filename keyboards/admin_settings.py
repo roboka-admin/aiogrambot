@@ -19,5 +19,14 @@ def admin_settings_keyboard(settings: BotSettings) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text=antispam_label, callback_data="admin_settings_toggle_antispam"),
                 InlineKeyboardButton(text=force_label, callback_data="admin_settings_toggle_force_subscription"),
             ],
+            [
+                InlineKeyboardButton(
+                    text=(
+                        f"🎁 پاداش دعوت: {settings.referral_reward_coins} سکه"
+                        f" / {settings.referral_reward_per_invites} دعوت"
+                    ),
+                    callback_data="admin_settings_referral_reward",
+                ),
+            ],
         ]
     )

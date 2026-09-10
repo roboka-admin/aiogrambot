@@ -1,11 +1,16 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy import Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.timezone import tehran_now
 from models.base import Base
-from models.bot_settings import DEFAULT_MAINTENANCE_MESSAGE, DEFAULT_OFFLINE_MESSAGE
+from models.bot_settings import (
+    DEFAULT_MAINTENANCE_MESSAGE,
+    DEFAULT_OFFLINE_MESSAGE,
+    DEFAULT_REFERRAL_REWARD_COINS,
+    DEFAULT_REFERRAL_REWARD_PER_INVITES,
+)
 
 
 class BotSettingsRecord(Base):
@@ -18,4 +23,6 @@ class BotSettingsRecord(Base):
     force_subscription_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     offline_message: Mapped[str] = mapped_column(String(1000), default=DEFAULT_OFFLINE_MESSAGE)
     maintenance_message: Mapped[str] = mapped_column(String(1000), default=DEFAULT_MAINTENANCE_MESSAGE)
+    referral_reward_coins: Mapped[int] = mapped_column(Integer, default=DEFAULT_REFERRAL_REWARD_COINS)
+    referral_reward_per_invites: Mapped[int] = mapped_column(Integer, default=DEFAULT_REFERRAL_REWARD_PER_INVITES)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=tehran_now, onupdate=tehran_now)

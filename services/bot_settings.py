@@ -50,6 +50,21 @@ class BotSettingsService:
         return await self._bot_settings_repository.update(settings)
 
     @transactional
+    async def set_referral_reward(
+        self, *, coins: int, per_invites: int
+    ) -> BotSettings:
+        """Configure how many coins a referrer earns per ``per_invites`` registered invites."""
+        if coins <= 0:
+            raise ValueError("coins must be positive")
+        if per_invites <= 0:
+            raise ValueError("per_invites must be positive")
+        settings = await self._get_settings()
+        settings.referral_reward_coins = coins
+        settings.referral_reward_per_invites = per_invites
+        settings.updated_at = tehran_now()
+        return await self._bot_settings_repository.update(settings)
+
+    @transactional
     async def toggle_bot(self) -> BotSettings:
         settings = await self._get_settings()
         settings.bot_enabled = not settings.bot_enabled

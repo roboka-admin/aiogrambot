@@ -82,6 +82,20 @@ class NotificationService:
             f"📊 مجموع دعوت‌های شما: {total_referrals}",
         )
 
+    async def referral_reward_earned(
+        self,
+        referrer_telegram_id: int,
+        coins: int,
+        balance: int,
+        registered_referrals: int,
+    ) -> None:
+        await self._send(
+            referrer_telegram_id,
+            f"🎁 یکی از دعوت‌شده‌های شما ثبت‌نام کرد و {coins} سکه پاداش گرفتید!\n"
+            f"✅ دعوت‌های ثبت‌نام‌شده: {registered_referrals}\n"
+            f"🪙 موجودی فعلی: {balance} سکه",
+        )
+
     async def _send(self, telegram_id: int, text: str) -> None:
         try:
             await self._telegram_gateway.send_message(telegram_id, text)

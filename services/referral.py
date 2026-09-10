@@ -1,28 +1,43 @@
 import re
 import secrets
+from dataclasses import dataclass
 from datetime import timedelta
 from math import ceil
 
 from core.timezone import tehran_now
 from core.transaction import NullTransactionManager, TransactionManager, transactional
 from exceptions.user import UserNotFoundError
+from models.bot_settings import BotSettings
 from models.user import User, UserStatus
+from repositories.interfaces.bot_settings import IBotSettingsRepository
 from repositories.interfaces.referral import IReferralRepository
 
 
 _REFERRAL_CODE_PATTERN = re.compile(r"^ref_[0-9a-f]{32}$")
 
 
+@dataclass(frozen=True, slots=True)
+class ReferralReward:
+    """Coins credited to a referrer after one of their invites registered."""
+
+    referrer_id: int
+    coins: int
+    balance: int
+    registered_referrals: int
+
+
 class ReferralService:
-    """Own referral-code lifecycle, attribution, and referral statistics."""
+    """Own referral-code lifecycle, attribution, rewards, and statistics."""
 
     def __init__(
         self,
         *,
         referral_repository: IReferralRepository,
+        bot_settings_repository: IBotSettingsRepository,
         transaction_manager: TransactionManager | None = None,
     ) -> None:
         self._referral_repository = referral_repository
+        self._bot_settings_repository = bot_settings_repository
         self._transaction_manager = transaction_manager or NullTransactionManager()
 
     @transactional
@@ -128,6 +143,45 @@ class ReferralService:
             processed_at,
         )
         return referrer.telegram_id if claimed else None
+
+    @transactional
+    async def reward_referrer_for_registration(
+        self, *, registered_user: User
+    ) -> ReferralReward | None:
+        """Credit the referrer once ``registered_user`` completed registration.
+
+        The reward is threshold based: the referrer earns
+        ``referral_reward_coins`` each time their number of *registered*
+        referrals reaches a multiple of ``referral_reward_per_invites``.
+        Counting registered referrals (rather than /start attributions)
+        keeps throwaway accounts that never register from generating coins.
+        Returns None when nothing was credited.
+        """
+        referrer_id = registered_user.referred_by_user_id
+        if referrer_id is None:
+            return None
+
+        settings = await self._bot_settings_repository.get() or BotSettings()
+        per_invites = settings.referral_reward_per_invites
+        coins = settings.referral_reward_coins
+        if per_invites <= 0 or coins <= 0:
+            return None
+
+        registered = await self._referral_repository.count_registered_referrals(
+            referrer_id
+        )
+        if registered == 0 or registered % per_invites != 0:
+            return None
+
+        balance = await self._referral_repository.add_coins(referrer_id, coins)
+        if balance is None:
+            return None
+        return ReferralReward(
+            referrer_id=referrer_id,
+            coins=coins,
+            balance=balance,
+            registered_referrals=registered,
+        )
 
     @transactional
     async def get_referral_count(self, telegram_id: int) -> int:

@@ -110,6 +110,33 @@ class ReferralRepository(IReferralRepository):
         )
         return result.scalar_one()
 
+    async def count_registered_referrals(self, telegram_id: int) -> int:
+        result = await self._session.execute(
+            select(func.count())
+            .select_from(UserRecord)
+            .where(
+                UserRecord.referred_by_user_id == telegram_id,
+                UserRecord.registration_status
+                == RegistrationStatus.REGISTERED.value,
+            )
+        )
+        return result.scalar_one()
+
+    async def add_coins(self, telegram_id: int, amount: int) -> int | None:
+        """Atomically credit coins and return the new balance (None if no such user)."""
+        result = await self._session.execute(
+            update(UserRecord)
+            .where(UserRecord.telegram_id == telegram_id)
+            .values(coins=UserRecord.coins + amount)
+        )
+        await self._session.flush()
+        if result.rowcount != 1:
+            return None
+        balance = await self._session.execute(
+            select(UserRecord.coins).where(UserRecord.telegram_id == telegram_id)
+        )
+        return balance.scalar_one()
+
     async def count_referrals_total(self) -> int:
         return await self._count_referred_where()
 

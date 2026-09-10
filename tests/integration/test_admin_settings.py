@@ -28,7 +28,8 @@ async def test_settings_update_edits_when_message_is_stale() -> None:
         "حالت تعمیرات: ⚪ غیرفعال\n"
         "ضد اسپم: 🟢 فعال\n"
         "عضویت اجباری: ⚪ خاموش\n"
-        "وضعیت مؤثر: 🔴 غیرفعال برای کاربران\n\n"
+        "وضعیت مؤثر: 🔴 غیرفعال برای کاربران\n"
+        "پاداش دعوت: 1 سکه به ازای هر 1 دعوت ثبت‌نام‌شده\n\n"
         "مدیران حتی در حالت خاموش یا تعمیرات به ربات دسترسی دارند.",
         reply_markup=admin_settings_keyboard(new_settings),
         parse_mode=None,
@@ -36,12 +37,14 @@ async def test_settings_update_edits_when_message_is_stale() -> None:
     callback.answer.assert_awaited_once_with("وضعیت ربات تغییر کرد.")
 
 
-def test_settings_keyboard_has_two_row_layout() -> None:
+def test_settings_keyboard_has_toggle_rows_and_referral_reward_row() -> None:
     keyboard = admin_settings_keyboard(BotSettings())
 
-    assert len(keyboard.inline_keyboard) == 2
+    assert len(keyboard.inline_keyboard) == 3
     assert len(keyboard.inline_keyboard[0]) == 2
     assert len(keyboard.inline_keyboard[1]) == 2
+    assert len(keyboard.inline_keyboard[2]) == 1
+    assert keyboard.inline_keyboard[2][0].callback_data == "admin_settings_referral_reward"
 
     assert [button.callback_data for button in keyboard.inline_keyboard[0]] == [
         "admin_settings_toggle_bot",
@@ -65,3 +68,11 @@ def test_settings_keyboard_antispam_and_force_subscription_labels_reflect_state(
     assert enabled.inline_keyboard[1][1].text == "🟢 عضویت اجباری فعال"
     assert disabled.inline_keyboard[1][0].text == "🔴 ضد اسپم خاموش"
     assert disabled.inline_keyboard[1][1].text == "⚪ عضویت اجباری خاموش"
+
+
+def test_settings_keyboard_referral_reward_label_reflects_configuration() -> None:
+    keyboard = admin_settings_keyboard(
+        BotSettings(referral_reward_coins=5, referral_reward_per_invites=3)
+    )
+
+    assert keyboard.inline_keyboard[2][0].text == "🎁 پاداش دعوت: 5 سکه / 3 دعوت"

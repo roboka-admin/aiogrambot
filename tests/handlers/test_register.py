@@ -6,6 +6,7 @@ from exceptions.user import UserAlreadyExistsError
 from handlers.register import process_age
 from keyboards.menu import main_menu
 from models.user import RegistrationStatus, User
+from services.referral import ReferralReward
 
 
 def make_message(text: str) -> MagicMock:
@@ -23,22 +24,41 @@ def make_state(name: str = "Sara") -> MagicMock:
     return state
 
 
+def make_referral_service(reward: ReferralReward | None = None) -> MagicMock:
+    referral_service = MagicMock()
+    referral_service.reward_referrer_for_registration = AsyncMock(return_value=reward)
+    return referral_service
+
+
+def make_notification_service() -> MagicMock:
+    notification_service = MagicMock()
+    notification_service.referral_reward_earned = AsyncMock()
+    return notification_service
+
+
+def make_registered_user(referred_by: int | None = None) -> User:
+    return User(
+        telegram_id=10,
+        telegram_name="Sara",
+        name="Sara",
+        age=25,
+        registration_status=RegistrationStatus.REGISTERED,
+        referred_by_user_id=referred_by,
+    )
+
+
 @pytest.mark.asyncio
 async def test_successful_registration_shows_main_menu() -> None:
     message = make_message("25")
     state = make_state()
     register_service = MagicMock()
-    register_service.register = AsyncMock(
-        return_value=User(
-            telegram_id=10,
-            telegram_name="Sara",
-            name="Sara",
-            age=25,
-            registration_status=RegistrationStatus.REGISTERED,
-        )
-    )
+    register_service.register = AsyncMock(return_value=make_registered_user())
+    referral_service = make_referral_service()
+    notification_service = make_notification_service()
 
-    await process_age(message, state, register_service)
+    await process_age(
+        message, state, register_service, referral_service, notification_service
+    )
 
     register_service.register.assert_awaited_once_with(
         telegram_id=10, name="Sara", age=25
@@ -48,6 +68,31 @@ async def test_successful_registration_shows_main_menu() -> None:
     # The user has just unlocked the bot, so the main menu buttons must be
     # attached to the confirmation instead of leaving them without navigation.
     assert message.answer.await_args.kwargs["reply_markup"] is main_menu
+    referral_service.reward_referrer_for_registration.assert_awaited_once()
+    notification_service.referral_reward_earned.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_successful_registration_notifies_referrer_when_reward_is_earned() -> None:
+    message = make_message("25")
+    state = make_state()
+    registered = make_registered_user(referred_by=7)
+    register_service = MagicMock()
+    register_service.register = AsyncMock(return_value=registered)
+    reward = ReferralReward(
+        referrer_id=7, coins=5, balance=15, registered_referrals=3
+    )
+    referral_service = make_referral_service(reward)
+    notification_service = make_notification_service()
+
+    await process_age(
+        message, state, register_service, referral_service, notification_service
+    )
+
+    referral_service.reward_referrer_for_registration.assert_awaited_once_with(
+        registered_user=registered
+    )
+    notification_service.referral_reward_earned.assert_awaited_once_with(7, 5, 15, 3)
 
 
 @pytest.mark.asyncio
@@ -56,8 +101,13 @@ async def test_already_registered_user_does_not_get_menu_from_registration() -> 
     state = make_state()
     register_service = MagicMock()
     register_service.register = AsyncMock(side_effect=UserAlreadyExistsError())
+    referral_service = make_referral_service()
+    notification_service = make_notification_service()
 
-    await process_age(message, state, register_service)
+    await process_age(
+        message, state, register_service, referral_service, notification_service
+    )
 
     state.clear.assert_awaited_once()
     message.answer.assert_awaited_once_with("❌ شما قبلاً ثبت نام کرده‌اید.")
+    referral_service.reward_referrer_for_registration.assert_not_awaited()

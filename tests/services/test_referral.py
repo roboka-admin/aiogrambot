@@ -1,6 +1,7 @@
 import pytest
 from sqlalchemy import BigInteger
 
+from models.bot_settings import BotSettings
 from models.user import RegistrationStatus, User
 from models.user_db import UserRecord
 from services.referral import ReferralService
@@ -66,6 +67,20 @@ class FakeReferralRepository:
             user.referred_by_user_id == telegram_id for user in self.users.values()
         )
 
+    async def count_registered_referrals(self, telegram_id: int) -> int:
+        return sum(
+            user.referred_by_user_id == telegram_id
+            and user.registration_status is RegistrationStatus.REGISTERED
+            for user in self.users.values()
+        )
+
+    async def add_coins(self, telegram_id: int, amount: int) -> int | None:
+        user = self.users.get(telegram_id)
+        if user is None:
+            return None
+        user.coins += amount
+        return user.coins
+
     async def list_referrals(
         self, telegram_id: int, *, offset: int, limit: int
     ) -> list[User]:
@@ -121,10 +136,125 @@ def make_user(telegram_id: int, code: str | None = None) -> User:
     )
 
 
+class FakeBotSettingsRepository:
+    def __init__(self, settings: BotSettings | None = None) -> None:
+        self.settings = settings
+
+    async def get(self) -> BotSettings | None:
+        return self.settings
+
+
 @pytest.fixture
 def service_and_repository() -> tuple[ReferralService, FakeReferralRepository]:
     repository = FakeReferralRepository()
-    return ReferralService(referral_repository=repository), repository
+    service = ReferralService(
+        referral_repository=repository,
+        bot_settings_repository=FakeBotSettingsRepository(),
+    )
+    return service, repository
+
+
+def make_reward_service(
+    repository: FakeReferralRepository, *, coins: int, per_invites: int
+) -> ReferralService:
+    return ReferralService(
+        referral_repository=repository,
+        bot_settings_repository=FakeBotSettingsRepository(
+            BotSettings(
+                referral_reward_coins=coins,
+                referral_reward_per_invites=per_invites,
+            )
+        ),
+    )
+
+
+def make_registered_referral(telegram_id: int, referrer_id: int) -> User:
+    return User(
+        telegram_id=telegram_id,
+        telegram_name=f"User {telegram_id}",
+        referred_by_user_id=referrer_id,
+        registration_status=RegistrationStatus.REGISTERED,
+    )
+
+
+@pytest.mark.asyncio
+async def test_reward_defaults_to_one_coin_per_registered_invite(
+    service_and_repository,
+) -> None:
+    # No settings row yet -> BotSettings() defaults (1 coin / 1 invite).
+    service, repository = service_and_repository
+    repository.users[1] = make_user(1)
+    repository.users[2] = make_registered_referral(2, referrer_id=1)
+
+    reward = await service.reward_referrer_for_registration(
+        registered_user=repository.users[2]
+    )
+
+    assert reward is not None
+    assert (reward.referrer_id, reward.coins, reward.balance) == (1, 1, 1)
+    assert reward.registered_referrals == 1
+    assert repository.users[1].coins == 1
+
+
+@pytest.mark.asyncio
+async def test_reward_is_granted_only_when_registered_count_hits_threshold() -> None:
+    repository = FakeReferralRepository()
+    repository.users[1] = make_user(1)
+    service = make_reward_service(repository, coins=5, per_invites=3)
+
+    rewards = []
+    for telegram_id in (2, 3, 4, 5, 6, 7):
+        repository.users[telegram_id] = make_registered_referral(
+            telegram_id, referrer_id=1
+        )
+        rewards.append(
+            await service.reward_referrer_for_registration(
+                registered_user=repository.users[telegram_id]
+            )
+        )
+
+    # 6 registered invites at 3-per-reward -> rewards on the 3rd and 6th only.
+    assert [reward is not None for reward in rewards] == [
+        False, False, True, False, False, True
+    ]
+    assert rewards[2].registered_referrals == 3
+    assert rewards[5].registered_referrals == 6
+    assert repository.users[1].coins == 10
+
+
+@pytest.mark.asyncio
+async def test_reward_ignores_unregistered_referrals() -> None:
+    repository = FakeReferralRepository()
+    repository.users[1] = make_user(1)
+    service = make_reward_service(repository, coins=1, per_invites=2)
+    # One referral that only did /start, one that actually registered.
+    repository.users[2] = User(
+        telegram_id=2, telegram_name="Lurker", referred_by_user_id=1
+    )
+    repository.users[3] = make_registered_referral(3, referrer_id=1)
+
+    reward = await service.reward_referrer_for_registration(
+        registered_user=repository.users[3]
+    )
+
+    assert reward is None
+    assert repository.users[1].coins == 0
+
+
+@pytest.mark.asyncio
+async def test_reward_skips_users_without_referrer(service_and_repository) -> None:
+    service, repository = service_and_repository
+    repository.users[2] = User(
+        telegram_id=2,
+        telegram_name="Organic",
+        registration_status=RegistrationStatus.REGISTERED,
+    )
+
+    reward = await service.reward_referrer_for_registration(
+        registered_user=repository.users[2]
+    )
+
+    assert reward is None
 
 
 @pytest.mark.asyncio

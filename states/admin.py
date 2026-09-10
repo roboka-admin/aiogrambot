@@ -11,6 +11,11 @@ class AdminBroadcastStates(StatesGroup):
     waiting_confirmation = State()
 
 
+class AdminSettingsStates(StatesGroup):
+    waiting_for_referral_reward_coins = State()
+    waiting_for_referral_reward_per_invites = State()
+
+
 class AdminForceSubscriptionStates(StatesGroup):
     waiting_for_chat = State()
 

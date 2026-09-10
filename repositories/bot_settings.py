@@ -26,6 +26,8 @@ class BotSettingsRepository(IBotSettingsRepository):
             force_subscription_enabled=settings.force_subscription_enabled,
             offline_message=settings.offline_message,
             maintenance_message=settings.maintenance_message,
+            referral_reward_coins=settings.referral_reward_coins,
+            referral_reward_per_invites=settings.referral_reward_per_invites,
             updated_at=settings.updated_at,
         )
         self._session.add(record)
@@ -46,6 +48,8 @@ class BotSettingsRepository(IBotSettingsRepository):
         record.force_subscription_enabled = settings.force_subscription_enabled
         record.offline_message = settings.offline_message
         record.maintenance_message = settings.maintenance_message
+        record.referral_reward_coins = settings.referral_reward_coins
+        record.referral_reward_per_invites = settings.referral_reward_per_invites
         record.updated_at = settings.updated_at
         await self._session.flush()
         return self._to_domain(record)
@@ -60,5 +64,7 @@ class BotSettingsRepository(IBotSettingsRepository):
             force_subscription_enabled=record.force_subscription_enabled,
             offline_message=record.offline_message,
             maintenance_message=record.maintenance_message,
+            referral_reward_coins=record.referral_reward_coins,
+            referral_reward_per_invites=record.referral_reward_per_invites,
             updated_at=record.updated_at,
         )

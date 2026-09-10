@@ -87,6 +87,10 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
         assert "0005_membership_events -> 0006_admin_foundation" in output
         assert "0006_admin_foundation -> 0007_add_referrals" in output
         assert "0007_add_referrals -> 0008_add_referral_pending_code" in output
+        assert (
+            "0008_add_referral_pending_code -> 0009_add_referral_reward_settings"
+            in output
+        )
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
             tables = set((await session.execute(text("SHOW TABLES"))).scalars())
@@ -102,10 +106,16 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
             settings_count = (
                 await session.execute(text("SELECT COUNT(*) FROM bot_settings WHERE id = 1"))
             ).scalar_one()
-            antispam_enabled, force_subscription_enabled = (
+            (
+                antispam_enabled,
+                force_subscription_enabled,
+                referral_reward_coins,
+                referral_reward_per_invites,
+            ) = (
                 await session.execute(
                     text(
-                        "SELECT antispam_enabled, force_subscription_enabled "
+                        "SELECT antispam_enabled, force_subscription_enabled, "
+                        "referral_reward_coins, referral_reward_per_invites "
                         "FROM bot_settings WHERE id = 1"
                     )
                 )
@@ -130,10 +140,12 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
             "referral_processed_at",
             "referral_pending_code",
         }.issubset(user_columns)
-        assert revision == "0008_add_referral_pending_code"
+        assert revision == "0009_add_referral_reward_settings"
         assert settings_count == 1
         assert antispam_enabled == 1
         assert force_subscription_enabled == 0
+        assert referral_reward_coins == 1
+        assert referral_reward_per_invites == 1
     finally:
         await engine.dispose()
 
@@ -189,6 +201,6 @@ async def test_referral_migration_widens_legacy_int_telegram_id() -> None:
 
         assert telegram_id_type.lower() == "bigint"
         assert "fk_users_referred_by_user_id" in foreign_keys
-        assert revision == "0008_add_referral_pending_code"
+        assert revision == "0009_add_referral_reward_settings"
     finally:
         await engine.dispose()
