@@ -4,7 +4,10 @@ import pytest
 
 from handlers.force_subscription import check_force_subscription_handler
 from keyboards.force_subscription import CHECK_CALLBACK, force_subscription_keyboard
+from keyboards.menu import main_menu
+from keyboards.start import start_keyboard
 from models.force_subscription import ForceSubscriptionTarget, ForceSubscriptionTargetType
+from models.user import RegistrationStatus, User
 from services.force_subscription import (
     MembershipCheckResult,
     MembershipStatus,
@@ -53,10 +56,12 @@ def test_keyboard_does_not_create_fake_link_when_target_has_no_link() -> None:
 @pytest.mark.asyncio
 async def test_check_handler_deletes_requirement_message_after_success() -> None:
     callback = MagicMock()
-    callback.from_user = MagicMock(id=10)
+    callback.from_user = MagicMock(id=10, first_name="Sara")
     callback.message = MagicMock()
     callback.message.delete = AsyncMock()
+    callback.message.answer = AsyncMock()
     callback.answer = AsyncMock()
+    user = User(telegram_id=10, telegram_name="Sara")
 
     service = MagicMock()
     service.check_membership = AsyncMock(
@@ -69,7 +74,7 @@ async def test_check_handler_deletes_requirement_message_after_success() -> None
     notification_service.referral_joined = AsyncMock()
 
     await check_force_subscription_handler(
-        callback, service, referral_service, notification_service
+        callback, user, service, referral_service, notification_service
     )
 
     service.check_membership.assert_awaited_once_with(user_telegram_id=10)
@@ -83,6 +88,43 @@ async def test_check_handler_deletes_requirement_message_after_success() -> None
     callback.answer.assert_awaited_once_with(
         "✅ عضویت شما تأیید شد. حالا می‌توانید از ربات استفاده کنید."
     )
+    # The blocked /start was swallowed by the middleware, so the welcome
+    # (with the register button) must be re-sent after verification.
+    callback.message.answer.assert_awaited_once()
+    assert callback.message.answer.await_args.kwargs["reply_markup"] is start_keyboard
+
+
+@pytest.mark.asyncio
+async def test_check_handler_sends_main_menu_when_user_is_already_registered() -> None:
+    callback = MagicMock()
+    callback.from_user = MagicMock(id=10, first_name="Sara")
+    callback.message = MagicMock()
+    callback.message.delete = AsyncMock()
+    callback.message.answer = AsyncMock()
+    callback.answer = AsyncMock()
+    user = User(
+        telegram_id=10,
+        telegram_name="Sara",
+        registration_status=RegistrationStatus.REGISTERED,
+    )
+
+    service = MagicMock()
+    service.check_membership = AsyncMock(
+        return_value=MembershipCheckResult(is_allowed=True, targets=())
+    )
+    service.record_successful_membership_check = AsyncMock()
+    referral_service = MagicMock()
+    referral_service.claim_pending_referral = AsyncMock(return_value=None)
+    notification_service = MagicMock()
+    notification_service.referral_joined = AsyncMock()
+
+    await check_force_subscription_handler(
+        callback, user, service, referral_service, notification_service
+    )
+
+    callback.message.delete.assert_awaited_once()
+    callback.message.answer.assert_awaited_once()
+    assert callback.message.answer.await_args.kwargs["reply_markup"] is main_menu
 
 
 @pytest.mark.asyncio
@@ -91,7 +133,9 @@ async def test_check_handler_notifies_referrer_after_deferred_claim() -> None:
     callback.from_user = MagicMock(id=10, first_name="Sara")
     callback.message = MagicMock()
     callback.message.delete = AsyncMock()
+    callback.message.answer = AsyncMock()
     callback.answer = AsyncMock()
+    user = User(telegram_id=10, telegram_name="Sara")
 
     service = MagicMock()
     service.check_membership = AsyncMock(
@@ -105,7 +149,7 @@ async def test_check_handler_notifies_referrer_after_deferred_claim() -> None:
     notification_service.referral_joined = AsyncMock()
 
     await check_force_subscription_handler(
-        callback, service, referral_service, notification_service
+        callback, user, service, referral_service, notification_service
     )
 
     referral_service.claim_pending_referral.assert_awaited_once_with(telegram_id=10)
@@ -122,7 +166,9 @@ async def test_check_handler_keeps_message_when_membership_is_missing() -> None:
     callback.message = MagicMock()
     callback.message.delete = AsyncMock()
     callback.message.edit_reply_markup = AsyncMock()
+    callback.message.answer = AsyncMock()
     callback.answer = AsyncMock()
+    user = User(telegram_id=10, telegram_name="Sara")
 
     service = MagicMock()
     service.check_membership = AsyncMock(
@@ -136,7 +182,7 @@ async def test_check_handler_keeps_message_when_membership_is_missing() -> None:
     notification_service = MagicMock()
 
     await check_force_subscription_handler(
-        callback, service, referral_service, notification_service
+        callback, user, service, referral_service, notification_service
     )
 
     referral_service.claim_pending_referral.assert_not_awaited()
@@ -146,6 +192,7 @@ async def test_check_handler_keeps_message_when_membership_is_missing() -> None:
         show_alert=True,
     )
     callback.message.edit_reply_markup.assert_awaited_once()
+    callback.message.answer.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -159,7 +206,9 @@ async def test_check_handler_skips_edit_when_missing_targets_are_unchanged() -> 
     callback.message.reply_markup = force_subscription_keyboard([missing])
     callback.message.delete = AsyncMock()
     callback.message.edit_reply_markup = AsyncMock()
+    callback.message.answer = AsyncMock()
     callback.answer = AsyncMock()
+    user = User(telegram_id=10, telegram_name="Sara")
 
     service = MagicMock()
     service.check_membership = AsyncMock(
@@ -173,7 +222,7 @@ async def test_check_handler_skips_edit_when_missing_targets_are_unchanged() -> 
     notification_service = MagicMock()
 
     await check_force_subscription_handler(
-        callback, service, referral_service, notification_service
+        callback, user, service, referral_service, notification_service
     )
 
     callback.answer.assert_awaited_once_with(
