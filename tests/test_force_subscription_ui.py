@@ -63,18 +63,55 @@ async def test_check_handler_deletes_requirement_message_after_success() -> None
         return_value=MembershipCheckResult(is_allowed=True, targets=())
     )
     service.record_successful_membership_check = AsyncMock()
+    referral_service = MagicMock()
+    referral_service.claim_pending_referral = AsyncMock(return_value=None)
+    notification_service = MagicMock()
+    notification_service.referral_joined = AsyncMock()
 
-    await check_force_subscription_handler(callback, service)
+    await check_force_subscription_handler(
+        callback, service, referral_service, notification_service
+    )
 
     service.check_membership.assert_awaited_once_with(user_telegram_id=10)
     service.record_successful_membership_check.assert_awaited_once_with(
         user_telegram_id=10,
         result=MembershipCheckResult(is_allowed=True, targets=()),
     )
+    referral_service.claim_pending_referral.assert_awaited_once_with(telegram_id=10)
+    notification_service.referral_joined.assert_not_awaited()
     callback.message.delete.assert_awaited_once()
     callback.answer.assert_awaited_once_with(
         "✅ عضویت شما تأیید شد. حالا می‌توانید از ربات استفاده کنید."
     )
+
+
+@pytest.mark.asyncio
+async def test_check_handler_notifies_referrer_after_deferred_claim() -> None:
+    callback = MagicMock()
+    callback.from_user = MagicMock(id=10, first_name="Sara")
+    callback.message = MagicMock()
+    callback.message.delete = AsyncMock()
+    callback.answer = AsyncMock()
+
+    service = MagicMock()
+    service.check_membership = AsyncMock(
+        return_value=MembershipCheckResult(is_allowed=True, targets=())
+    )
+    service.record_successful_membership_check = AsyncMock()
+    referral_service = MagicMock()
+    referral_service.claim_pending_referral = AsyncMock(return_value=7)
+    referral_service.get_referral_count = AsyncMock(return_value=4)
+    notification_service = MagicMock()
+    notification_service.referral_joined = AsyncMock()
+
+    await check_force_subscription_handler(
+        callback, service, referral_service, notification_service
+    )
+
+    referral_service.claim_pending_referral.assert_awaited_once_with(telegram_id=10)
+    referral_service.get_referral_count.assert_awaited_once_with(7)
+    notification_service.referral_joined.assert_awaited_once_with(7, "Sara", 4)
+    callback.message.delete.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -94,9 +131,15 @@ async def test_check_handler_keeps_message_when_membership_is_missing() -> None:
             targets=(TargetMembershipResult(missing, MembershipStatus.LEFT),),
         )
     )
+    referral_service = MagicMock()
+    referral_service.claim_pending_referral = AsyncMock()
+    notification_service = MagicMock()
 
-    await check_force_subscription_handler(callback, service)
+    await check_force_subscription_handler(
+        callback, service, referral_service, notification_service
+    )
 
+    referral_service.claim_pending_referral.assert_not_awaited()
     callback.message.delete.assert_not_called()
     callback.answer.assert_awaited_once_with(
         "❌ هنوز در همه موارد موردنیاز عضو نشده‌اید.",

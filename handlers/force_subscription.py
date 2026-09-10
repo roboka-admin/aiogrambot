@@ -3,6 +3,8 @@ from aiogram.types import CallbackQuery
 
 from keyboards.force_subscription import force_subscription_keyboard
 from services.force_subscription import ForceSubscriptionService
+from services.notification import NotificationService
+from services.referral import ReferralService
 
 router = Router()
 
@@ -11,6 +13,8 @@ router = Router()
 async def check_force_subscription_handler(
     callback: CallbackQuery,
     force_subscription_service: ForceSubscriptionService,
+    referral_service: ReferralService,
+    notification_service: NotificationService,
 ) -> None:
     if callback.from_user is None:
         await callback.answer()
@@ -25,6 +29,16 @@ async def check_force_subscription_handler(
             user_telegram_id=callback.from_user.id,
             result=result,
         )
+        # The invite stashed while this user was blocked is only attributed
+        # now that membership is verified.
+        referrer_id = await referral_service.claim_pending_referral(
+            telegram_id=callback.from_user.id,
+        )
+        if referrer_id is not None:
+            total = await referral_service.get_referral_count(referrer_id)
+            await notification_service.referral_joined(
+                referrer_id, callback.from_user.first_name, total
+            )
         await callback.answer("✅ عضویت شما تأیید شد. حالا می‌توانید از ربات استفاده کنید.")
         if callback.message is not None:
             await callback.message.delete()

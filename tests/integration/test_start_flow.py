@@ -19,6 +19,8 @@ async def test_start_flow_routes_through_user_middleware_and_injects_user():
     user_service = AsyncMock()
     user_service.get_or_create_telegram_user.return_value = user
     referral_service = AsyncMock()
+    referral_service.process_start.return_value = None
+    notification_service = AsyncMock()
 
     dp = Dispatcher()
     dp.message.outer_middleware(UserMiddleware())
@@ -42,6 +44,7 @@ async def test_start_flow_routes_through_user_middleware_and_injects_user():
             update=update,
             user_service=user_service,
             referral_service=referral_service,
+            notification_service=notification_service,
         )
 
     user_service.get_or_create_telegram_user.assert_awaited_once_with(

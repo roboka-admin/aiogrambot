@@ -5,6 +5,7 @@ from aiogram.types import Message
 from keyboards.menu import main_menu
 from keyboards.start import start_keyboard
 from models.user import RegistrationStatus, User
+from services.notification import NotificationService
 from services.referral import ReferralService
 
 
@@ -17,6 +18,7 @@ async def start_handler(
     user: User,
     command: CommandObject,
     referral_service: ReferralService,
+    notification_service: NotificationService,
 ) -> None:
     if user.registration_status == RegistrationStatus.REGISTERED:
         await message.answer(
@@ -26,10 +28,20 @@ async def start_handler(
         )
         return
 
-    await referral_service.process_start(
+    referrer_id = await referral_service.process_start(
         telegram_id=user.telegram_id,
         referral_code=command.args,
     )
+    if referrer_id is not None:
+        total = await referral_service.get_referral_count(referrer_id)
+        new_user_name = (
+            message.from_user.first_name
+            if message.from_user is not None
+            else user.telegram_name
+        )
+        await notification_service.referral_joined(
+            referrer_id, new_user_name, total
+        )
 
     await message.answer(
         "سلام 👋\n"

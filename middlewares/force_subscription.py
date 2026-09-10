@@ -7,6 +7,18 @@ from keyboards.force_subscription import CHECK_CALLBACK, force_subscription_keyb
 from services.admin import AdminService
 from services.bot_settings import BotSettingsService
 from services.force_subscription import ForceSubscriptionService
+from services.referral import ReferralService
+
+
+def _extract_start_payload(text: str) -> str | None:
+    """Return the /start argument (invite code) when the text is a /start."""
+    parts = text.strip().split(maxsplit=1)
+    if not parts:
+        return None
+    command = parts[0].split("@", maxsplit=1)[0]
+    if command != "/start" or len(parts) == 1:
+        return None
+    return parts[1].strip() or None
 
 
 class ForceSubscriptionMiddleware(BaseMiddleware):
@@ -48,8 +60,34 @@ class ForceSubscriptionMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         data["force_subscription_result"] = result
+        await self._stash_blocked_start_payload(event, data)
         await self._notify_blocked(event, result.missing_targets)
         return None
+
+    @staticmethod
+    async def _stash_blocked_start_payload(
+        event: Update, data: dict[str, Any]
+    ) -> None:
+        """Keep a blocked /start invite so it can be claimed after joining.
+
+        A blocked /start never reaches its handler, so without this the
+        invitation would be lost. The payload is only stashed; attribution
+        and the referrer notification happen after membership is verified.
+        """
+        message = getattr(event, "message", None)
+        if message is None or not message.text:
+            return
+        payload = _extract_start_payload(message.text)
+        if payload is None:
+            return
+        referral_service: ReferralService | None = data.get("referral_service")
+        telegram_user = data.get("event_from_user")
+        if referral_service is None or telegram_user is None:
+            return
+        await referral_service.save_pending_referral(
+            telegram_id=telegram_user.id,
+            referral_code=payload,
+        )
 
     @staticmethod
     async def _notify_blocked(event: Update, targets) -> None:

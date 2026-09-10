@@ -105,6 +105,7 @@ async def test_unsatisfied_user_is_blocked_with_subscription_keyboard() -> None:
     handler = AsyncMock(return_value="handled")
     event = MagicMock(spec=Update)
     event.message = MagicMock()
+    event.message.text = "hello"
     event.message.answer = AsyncMock()
     event.callback_query = None
     user = MagicMock(id=10)
@@ -130,3 +131,75 @@ async def test_unsatisfied_user_is_blocked_with_subscription_keyboard() -> None:
     event.message.answer.assert_awaited_once()
     _, kwargs = event.message.answer.await_args
     assert kwargs["reply_markup"].inline_keyboard[-1][0].callback_data == CHECK_CALLBACK
+
+
+@pytest.mark.asyncio
+async def test_blocked_start_payload_is_stashed_for_later_claim() -> None:
+    middleware = ForceSubscriptionMiddleware()
+    handler = AsyncMock(return_value="handled")
+    event = MagicMock(spec=Update)
+    event.message = MagicMock()
+    event.message.text = "/start ref_" + "b" * 32
+    event.message.answer = AsyncMock()
+    event.callback_query = None
+    user = MagicMock(id=10)
+    settings_service = MagicMock()
+    settings_service.get_settings = AsyncMock(
+        return_value=BotSettings(force_subscription_enabled=True)
+    )
+    force_service = MagicMock()
+    force_service.check_membership = AsyncMock(
+        return_value=MembershipCheckResult(is_allowed=False, targets=())
+    )
+    referral_service = MagicMock()
+    referral_service.save_pending_referral = AsyncMock(return_value=True)
+    data = {
+        "event_from_user": user,
+        "admin_service": _admin_service(active=False),
+        "bot_settings_service": settings_service,
+        "force_subscription_service": force_service,
+        "referral_service": referral_service,
+    }
+
+    result = await middleware(handler, event, data)
+
+    assert result is None
+    handler.assert_not_awaited()
+    referral_service.save_pending_referral.assert_awaited_once_with(
+        telegram_id=10,
+        referral_code="ref_" + "b" * 32,
+    )
+
+
+@pytest.mark.asyncio
+async def test_blocked_plain_message_does_not_touch_pending_referral() -> None:
+    middleware = ForceSubscriptionMiddleware()
+    handler = AsyncMock(return_value="handled")
+    event = MagicMock(spec=Update)
+    event.message = MagicMock()
+    event.message.text = "hello"
+    event.message.answer = AsyncMock()
+    event.callback_query = None
+    user = MagicMock(id=10)
+    settings_service = MagicMock()
+    settings_service.get_settings = AsyncMock(
+        return_value=BotSettings(force_subscription_enabled=True)
+    )
+    force_service = MagicMock()
+    force_service.check_membership = AsyncMock(
+        return_value=MembershipCheckResult(is_allowed=False, targets=())
+    )
+    referral_service = MagicMock()
+    referral_service.save_pending_referral = AsyncMock()
+    data = {
+        "event_from_user": user,
+        "admin_service": _admin_service(active=False),
+        "bot_settings_service": settings_service,
+        "force_subscription_service": force_service,
+        "referral_service": referral_service,
+    }
+
+    result = await middleware(handler, event, data)
+
+    assert result is None
+    referral_service.save_pending_referral.assert_not_awaited()
