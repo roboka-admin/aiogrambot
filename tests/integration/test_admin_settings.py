@@ -31,6 +31,7 @@ async def test_settings_update_edits_when_message_is_stale() -> None:
         "وضعیت مؤثر: 🔴 غیرفعال برای کاربران\n\n"
         "مدیران حتی در حالت خاموش یا تعمیرات به ربات دسترسی دارند.",
         reply_markup=admin_settings_keyboard(new_settings),
+        parse_mode=None,
     )
     callback.answer.assert_awaited_once_with("وضعیت ربات تغییر کرد.")
 

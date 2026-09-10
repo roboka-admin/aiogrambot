@@ -1,8 +1,8 @@
 from aiogram import F, Router
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery
 
 from callbacks.admin import AdminStatsCallback, AdminStatsRefreshCallback
+from core.telegram import edit_message_if_changed
 from filters.admin import AdminPermissionFilter
 from keyboards.admin_stats import system_stats_keyboard
 from services.system import SystemService
@@ -21,18 +21,6 @@ async def system_stats_handler(callback: CallbackQuery, system_service: SystemSe
 async def system_stats_refresh_handler(callback: CallbackQuery, system_service: SystemService) -> None:
     await _show_system_statistics(message=callback.message, system_service=system_service)
     await callback.answer("بروزرسانی شد.")
-
-
-async def _edit_message_if_changed(*, message, text: str, reply_markup) -> None:
-    if message is None:
-        return
-    if message.text == text and message.reply_markup == reply_markup:
-        return
-    try:
-        await message.edit_text(text, reply_markup=reply_markup)
-    except TelegramBadRequest as exc:
-        if "message is not modified" not in str(exc).lower():
-            raise
 
 
 async def _show_system_statistics(*, message, system_service: SystemService) -> None:
@@ -64,7 +52,7 @@ async def _show_system_statistics(*, message, system_service: SystemService) -> 
         f"📋 تعداد جدول‌ها: {stats.db_table_count:,}\n"
         f"📝 تعداد رکوردها: {row_count}"
     )
-    await _edit_message_if_changed(message=message, text=text, reply_markup=system_stats_keyboard())
+    await edit_message_if_changed(message=message, text=text, reply_markup=system_stats_keyboard())
 
 
 def _format_duration(seconds: int | None) -> str:

@@ -146,3 +146,39 @@ async def test_check_handler_keeps_message_when_membership_is_missing() -> None:
         show_alert=True,
     )
     callback.message.edit_reply_markup.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_check_handler_skips_edit_when_missing_targets_are_unchanged() -> None:
+    # Re-tapping the check button without joining must not raise
+    # "message is not modified" from Telegram.
+    missing = make_target(-1001, "News", username="news_channel")
+    callback = MagicMock()
+    callback.from_user = MagicMock(id=10)
+    callback.message = MagicMock()
+    callback.message.reply_markup = force_subscription_keyboard([missing])
+    callback.message.delete = AsyncMock()
+    callback.message.edit_reply_markup = AsyncMock()
+    callback.answer = AsyncMock()
+
+    service = MagicMock()
+    service.check_membership = AsyncMock(
+        return_value=MembershipCheckResult(
+            is_allowed=False,
+            targets=(TargetMembershipResult(missing, MembershipStatus.LEFT),),
+        )
+    )
+    referral_service = MagicMock()
+    referral_service.claim_pending_referral = AsyncMock()
+    notification_service = MagicMock()
+
+    await check_force_subscription_handler(
+        callback, service, referral_service, notification_service
+    )
+
+    callback.answer.assert_awaited_once_with(
+        "❌ هنوز در همه موارد موردنیاز عضو نشده‌اید.",
+        show_alert=True,
+    )
+    callback.message.edit_reply_markup.assert_not_called()
+    callback.message.delete.assert_not_called()

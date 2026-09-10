@@ -17,6 +17,7 @@ from callbacks.admin_support import (
     AdminSupportTicketCallback,
     AdminSupportUserCallback,
 )
+from core.telegram import edit_message_if_changed
 from exceptions.user import UserNotFoundError
 from filters.admin import AdminPermissionFilter
 from keyboards.admin_support import (
@@ -51,8 +52,9 @@ async def support_user_list_handler(callback: CallbackQuery, callback_data: Admi
     page_items, total_pages, page = _paginate(users, callback_data.page)
     status_text = "باز" if status is SupportStatus.OPEN else "بسته"
     names = await _user_names(page_items, user_service)
-    await callback.message.edit_text(
-        f"📩 کاربران دارای تیکت {status_text}\n\nتعداد کاربران: {len(users)}\nصفحه {page + 1} از {total_pages}\n\nهر کاربر را برای مشاهده پیام‌هایش انتخاب کنید.",
+    await edit_message_if_changed(
+        message=callback.message,
+        text=f"📩 کاربران دارای تیکت {status_text}\n\nتعداد کاربران: {len(users)}\nصفحه {page + 1} از {total_pages}\n\nهر کاربر را برای مشاهده پیام‌هایش انتخاب کنید.",
         reply_markup=_support_users_keyboard_with_names(page_items, names, status, page, total_pages),
     )
     await callback.answer()
@@ -185,7 +187,7 @@ async def support_cleanup_start_handler(callback: CallbackQuery, callback_data: 
         text = "🗑 پاک‌سازی همه تیکت‌ها\n\nآیا مطمئن هستید که می‌خواهید همه تیکت‌ها را حذف کنید؟"
     await state.set_state(AdminSupportStates.waiting_cleanup_confirmation)
     await state.update_data(cleanup_action=action)
-    await callback.message.edit_text(text, reply_markup=support_cleanup_confirm_keyboard(action=action))
+    await edit_message_if_changed(message=callback.message, text=text, reply_markup=support_cleanup_confirm_keyboard(action=action))
     await callback.answer()
 
 
@@ -220,8 +222,9 @@ async def _show_user_conversation(*, message: Message, telegram_id: int, status:
     except UserNotFoundError:
         user_text = "کاربر پیدا نشد"
     status_text = "🟢 باز" if status is SupportStatus.OPEN else "⚪ بسته"
-    await message.edit_text(
-        f"👤 کاربر: {user_text}\n🆔 <code>{telegram_id}</code>\n📌 وضعیت گفتگو: {status_text}\n📩 تعداد پیام‌ها: {len(tickets)}\n\nبرای مشاهده محتوای هر پیام، شماره تیکت را انتخاب کنید.",
+    await edit_message_if_changed(
+        message=message,
+        text=f"👤 کاربر: {user_text}\n🆔 <code>{telegram_id}</code>\n📌 وضعیت گفتگو: {status_text}\n📩 تعداد پیام‌ها: {len(tickets)}\n\nبرای مشاهده محتوای هر پیام، شماره تیکت را انتخاب کنید.",
         reply_markup=support_user_messages_keyboard(telegram_id=telegram_id, status=status, page=page, tickets=tickets),
         parse_mode="HTML",
     )
@@ -233,7 +236,7 @@ async def _show_support_overview(*, message: Message, support_service: SupportSe
     text = f"📩 مدیریت پشتیبانی\n\n🟢 کاربران با پیام باز: {len(open_users)}\n⚪ کاربران با پیام بسته: {len(closed_users)}\n\nیک بخش را انتخاب کنید:"
     keyboard = support_overview_keyboard(open_count=len(open_users), closed_count=len(closed_users))
     if edit:
-        await message.edit_text(text, reply_markup=keyboard)
+        await edit_message_if_changed(message=message, text=text, reply_markup=keyboard)
     else:
         await message.answer(text, reply_markup=keyboard)
 

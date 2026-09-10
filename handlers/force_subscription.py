@@ -1,6 +1,7 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
 
+from core.telegram import edit_reply_markup_if_changed
 from keyboards.force_subscription import force_subscription_keyboard
 from services.force_subscription import ForceSubscriptionService
 from services.notification import NotificationService
@@ -49,9 +50,12 @@ async def check_force_subscription_handler(
         show_alert=True,
     )
 
-    if callback.message is not None:
-        await callback.message.edit_reply_markup(
-            reply_markup=force_subscription_keyboard(
-                list(result.missing_targets)
-            )
-        )
+    # The keyboard is only refreshed when the missing targets actually
+    # changed; re-tapping the button with identical markup used to raise
+    # "message is not modified" from Telegram.
+    await edit_reply_markup_if_changed(
+        message=callback.message,
+        reply_markup=force_subscription_keyboard(
+            list(result.missing_targets)
+        ),
+    )

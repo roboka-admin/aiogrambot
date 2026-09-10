@@ -2,6 +2,7 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from core.telegram import edit_message_if_changed
 from exceptions.user import UserAlreadyExistsError
 from keyboards.register import cancel_register
 from keyboards.start import start_keyboard
@@ -21,7 +22,11 @@ async def start_registration(callback: CallbackQuery, state: FSMContext, user: U
     await callback.answer()
     await state.set_state(RegisterStates.waiting_name)
     if callback.message:
-        await callback.message.edit_text(text="لطفاً نام خود را وارد کنید.", reply_markup=cancel_register)
+        await edit_message_if_changed(
+            message=callback.message,
+            text="لطفاً نام خود را وارد کنید.",
+            reply_markup=cancel_register,
+        )
 
 
 @router.message(RegisterStates.waiting_name, F.text)
@@ -66,4 +71,8 @@ async def cancel_registration(callback: CallbackQuery, state: FSMContext) -> Non
     await callback.answer()
     await state.clear()
     if callback.message:
-        await callback.message.edit_text(text="ثبت نام لغو شد.", reply_markup=start_keyboard)
+        await edit_message_if_changed(
+            message=callback.message,
+            text="ثبت نام لغو شد.",
+            reply_markup=start_keyboard,
+        )

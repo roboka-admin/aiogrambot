@@ -13,6 +13,7 @@ from callbacks.admin import (
     AdminUserCallback,
     AdminUsersCallback,
 )
+from core.telegram import edit_message_if_changed
 from exceptions.user import UserNotFoundError
 from filters.admin import AdminFilter, AdminPermissionFilter
 from keyboards.admin import build_admin_menu
@@ -73,8 +74,9 @@ async def browse_users_start_handler(callback: CallbackQuery, user_service: User
 @router.callback_query(F.data == "admin_find_user", AdminPermissionFilter("users"))
 async def find_user_start_handler(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminUserStates.waiting_for_user_id)
-    await callback.message.edit_text(
-        "🔎 شناسه تلگرام کاربر را ارسال کنید:",
+    await edit_message_if_changed(
+        message=callback.message,
+        text="🔎 شناسه تلگرام کاربر را ارسال کنید:",
         reply_markup=admin_cancel_keyboard,
     )
     await callback.answer()
@@ -180,8 +182,9 @@ async def user_details_handler(callback: CallbackQuery, callback_data: AdminUser
     except UserNotFoundError:
         await callback.answer("کاربر پیدا نشد.", show_alert=True)
         return
-    await callback.message.edit_text(
-        _user_details_text(user),
+    await edit_message_if_changed(
+        message=callback.message,
+        text=_user_details_text(user),
         reply_markup=user_actions_keyboard(user, source=callback_data.source, page=callback_data.page),
     )
     await callback.answer()
@@ -272,8 +275,9 @@ async def user_action_handler(
     else:
         await callback.answer("عملیات نامعتبر است.", show_alert=True)
         return
-    await callback.message.edit_text(
-        _user_details_text(user),
+    await edit_message_if_changed(
+        message=callback.message,
+        text=_user_details_text(user),
         reply_markup=user_actions_keyboard(user, source=callback_data.source, page=callback_data.page),
     )
     await callback.answer(notice)
@@ -294,7 +298,7 @@ async def _show_stats_dashboard(*, message: Message, edit: bool) -> None:
     text = "📊 آمار و وضعیت\n\nیکی از گزینه‌ها را انتخاب کنید:"
     keyboard = stats_dashboard_keyboard()
     if edit:
-        await message.edit_text(text, reply_markup=keyboard)
+        await edit_message_if_changed(message=message, text=text, reply_markup=keyboard)
     else:
         await message.answer(text, reply_markup=keyboard)
 
@@ -313,7 +317,7 @@ async def _show_user_statistics(*, message: Message, user_service: UserService) 
         f"🟡 فعال ۷ روز اخیر: {stats['active_7d']:,}\n"
         f"⚫ غیرفعال بیش از ۳۰ روز: {stats['inactive_30d']:,}"
     )
-    await message.edit_text(text, reply_markup=user_stats_keyboard())
+    await edit_message_if_changed(message=message, text=text, reply_markup=user_stats_keyboard())
 
 
 async def _show_support_statistics(*, message: Message, support_service: SupportService) -> None:
@@ -328,7 +332,7 @@ async def _show_support_statistics(*, message: Message, support_service: Support
         f"📝 ۷ روز اخیر: {stats['last_7_days']:,}\n"
         f"📝 ۳۰ روز اخیر: {stats['last_30_days']:,}"
     )
-    await message.edit_text(text, reply_markup=support_stats_keyboard())
+    await edit_message_if_changed(message=message, text=text, reply_markup=support_stats_keyboard())
 
 
 async def _show_broadcast_statistics(*, message: Message, broadcast_service: BroadcastService) -> None:
@@ -363,7 +367,7 @@ async def _show_broadcast_statistics(*, message: Message, broadcast_service: Bro
             f"📅 زمان ارسال:\n{latest_str}\n"
             f"⏱ مدت زمان: {duration_str}"
         )
-    await message.edit_text(text, reply_markup=broadcast_stats_keyboard())
+    await edit_message_if_changed(message=message, text=text, reply_markup=broadcast_stats_keyboard())
 
 
 async def _show_antispam_statistics(*, message: Message, antispam_service: AntiSpamService) -> None:
@@ -377,18 +381,18 @@ async def _show_antispam_statistics(*, message: Message, antispam_service: AntiS
         f"📝 ۷ روز اخیر: {stats['last_7_days']:,}\n"
         f"📝 ۳۰ روز اخیر: {stats['last_30_days']:,}"
     )
-    await message.edit_text(text, reply_markup=antispam_stats_keyboard())
+    await edit_message_if_changed(message=message, text=text, reply_markup=antispam_stats_keyboard())
 
 
 async def _show_placeholder_statistics(*, message: Message, section: str) -> None:
-    await message.edit_text("این بخش به‌زودی اضافه می‌شود.", reply_markup=placeholder_stats_keyboard(section))
+    await edit_message_if_changed(message=message, text="این بخش به‌زودی اضافه می‌شود.", reply_markup=placeholder_stats_keyboard(section))
 
 
 async def _show_user_management(*, message: Message, edit: bool = False) -> None:
     text = "👥 مدیریت کاربران\n\nیکی از گزینه‌ها را انتخاب کنید:"
     keyboard = user_management_keyboard()
     if edit:
-        await message.edit_text(text, reply_markup=keyboard)
+        await edit_message_if_changed(message=message, text=text, reply_markup=keyboard)
     else:
         await message.answer(text, reply_markup=keyboard)
 
@@ -402,7 +406,7 @@ async def _show_users_page(*, message: Message, user_service: UserService, page:
     else:
         text = "👤 کاربران\n\n" f"تعداد کل کاربران: {total}\n" "برای مشاهده اطلاعات هر کاربر، روی نام او بزنید."
     if edit:
-        await message.edit_text(text, reply_markup=keyboard)
+        await edit_message_if_changed(message=message, text=text, reply_markup=keyboard)
     else:
         await message.answer(text, reply_markup=keyboard)
 
@@ -416,7 +420,7 @@ async def _show_blocked_users_page(*, message: Message, user_service: UserServic
     else:
         text = "🚫 کاربران مسدود\n\n" f"تعداد کل کاربران مسدود: {total}\n" "برای مشاهده اطلاعات هر کاربر، روی نام او بزنید."
     if edit:
-        await message.edit_text(text, reply_markup=keyboard)
+        await edit_message_if_changed(message=message, text=text, reply_markup=keyboard)
     else:
         await message.answer(text, reply_markup=keyboard)
 

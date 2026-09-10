@@ -1,10 +1,15 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
+from aiogram.exceptions import (
+    TelegramBadRequest,
+    TelegramForbiddenError,
+    TelegramRetryAfter,
+)
 from aiogram.methods import SendMessage
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from core.telegram import AiogramTelegramGateway
+from core.telegram import AiogramTelegramGateway, edit_reply_markup_if_changed
 from services.telegram import TelegramAccessError, TelegramRateLimitError
 
 
@@ -75,3 +80,87 @@ async def test_gateway_translates_member_status_to_plain_string() -> None:
     )
 
     assert status == "administrator"
+
+
+def _keyboard(label: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text=label, callback_data="x")]]
+    )
+
+
+@pytest.mark.asyncio
+async def test_edit_reply_markup_skips_api_call_when_markup_is_identical() -> None:
+    message = MagicMock()
+    message.reply_markup = _keyboard("same")
+    message.edit_reply_markup = AsyncMock()
+
+    assert (
+        await edit_reply_markup_if_changed(
+            message=message, reply_markup=_keyboard("same")
+        )
+        is False
+    )
+    message.edit_reply_markup.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_edit_reply_markup_edits_when_markup_differs() -> None:
+    message = MagicMock()
+    message.reply_markup = _keyboard("old")
+    message.edit_reply_markup = AsyncMock()
+
+    assert (
+        await edit_reply_markup_if_changed(
+            message=message, reply_markup=_keyboard("new")
+        )
+        is True
+    )
+    message.edit_reply_markup.assert_awaited_once_with(
+        reply_markup=_keyboard("new")
+    )
+
+
+@pytest.mark.asyncio
+async def test_edit_reply_markup_returns_false_for_missing_message() -> None:
+    assert (
+        await edit_reply_markup_if_changed(
+            message=None, reply_markup=_keyboard("new")
+        )
+        is False
+    )
+
+
+@pytest.mark.asyncio
+async def test_edit_reply_markup_absorbs_not_modified_race() -> None:
+    message = MagicMock()
+    message.reply_markup = _keyboard("old")
+    message.edit_reply_markup = AsyncMock(
+        side_effect=TelegramBadRequest(
+            method=MagicMock(),
+            message="Bad Request: message is not modified",
+        )
+    )
+
+    assert (
+        await edit_reply_markup_if_changed(
+            message=message, reply_markup=_keyboard("new")
+        )
+        is False
+    )
+
+
+@pytest.mark.asyncio
+async def test_edit_reply_markup_reraises_unrelated_errors() -> None:
+    message = MagicMock()
+    message.reply_markup = _keyboard("old")
+    message.edit_reply_markup = AsyncMock(
+        side_effect=TelegramBadRequest(
+            method=MagicMock(),
+            message="Bad Request: message to edit not found",
+        )
+    )
+
+    with pytest.raises(TelegramBadRequest):
+        await edit_reply_markup_if_changed(
+            message=message, reply_markup=_keyboard("new")
+        )

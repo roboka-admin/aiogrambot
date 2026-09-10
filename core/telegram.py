@@ -112,3 +112,31 @@ async def edit_message_if_changed(
         return False
 
     return True
+
+
+async def edit_reply_markup_if_changed(
+    *,
+    message: Message | None,
+    reply_markup: InlineKeyboardMarkup | None = None,
+) -> bool:
+    """Edit a message's inline keyboard only when it has changed.
+
+    Returns True when an edit was performed and False when no edit was needed.
+    A narrow guard handles the race where Telegram reports that the markup
+    became identical between our local comparison and the API request
+    (e.g. the user taps a button twice quickly).
+    """
+    if message is None:
+        return False
+
+    if message.reply_markup == reply_markup:
+        return False
+
+    try:
+        await message.edit_reply_markup(reply_markup=reply_markup)
+    except AiogramError as exc:
+        if "message is not modified" not in str(exc).lower():
+            raise
+        return False
+
+    return True

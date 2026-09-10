@@ -12,6 +12,7 @@ from callbacks.admin import (
 )
 from core.admin_permissions import ADMIN_PERMISSION_REGISTRY
 from core.commands import remove_admin_commands, set_admin_commands
+from core.telegram import edit_message_if_changed, edit_reply_markup_if_changed
 from exceptions.user import UserNotFoundError
 from filters.admin import AdminPermissionFilter
 from keyboards.admin_management import (
@@ -71,8 +72,9 @@ async def admin_management_back_handler(
     callback: CallbackQuery, admin_service: AdminService, state: FSMContext
 ) -> None:
     await state.clear()
-    await callback.message.edit_text(
-        f"🛡 مدیریت ادمین‌ها\n\nتعداد ادمین‌ها: {len(await admin_service.list_admins())}",
+    await edit_message_if_changed(
+        message=callback.message,
+        text=f"🛡 مدیریت ادمین‌ها\n\nتعداد ادمین‌ها: {len(await admin_service.list_admins())}",
         reply_markup=admin_management_keyboard(),
     )
     await callback.answer()
@@ -85,8 +87,10 @@ async def admin_list_handler(callback: CallbackQuery, admin_service: AdminServic
         text = "👥 هیچ ادمینی ثبت نشده است."
     else:
         text = "👥 فهرست ادمین‌ها\n\nبرای مشاهده جزئیات، ادمین موردنظر را انتخاب کنید."
-    await callback.message.edit_text(
-        text, reply_markup=await _admin_list_keyboard(callback, admins)
+    await edit_message_if_changed(
+        message=callback.message,
+        text=text,
+        reply_markup=await _admin_list_keyboard(callback, admins),
     )
     await callback.answer()
 
@@ -117,7 +121,7 @@ async def admin_view_handler(
             f"دسترسی‌ها:\n{permission_text}"
         )
 
-    await callback.message.edit_text(text, reply_markup=admin_detail_keyboard(admin))
+    await edit_message_if_changed(message=callback.message, text=text, reply_markup=admin_detail_keyboard(admin))
     await callback.answer()
 
 
@@ -139,8 +143,9 @@ async def admin_permissions_handler(
         if permission.key in actor_permissions
     ]
     selected = await admin_service.get_permissions(admin.telegram_id)
-    await callback.message.edit_text(
-        f"🔐 دسترسی‌های ادمین {admin.telegram_id}\n\nبرای تغییر، روی دسترسی موردنظر بزنید.",
+    await edit_message_if_changed(
+        message=callback.message,
+        text=f"🔐 دسترسی‌های ادمین {admin.telegram_id}\n\nبرای تغییر، روی دسترسی موردنظر بزنید.",
         reply_markup=managed_permission_keyboard(admin.telegram_id, permissions, selected),
     )
     await callback.answer()
@@ -178,8 +183,9 @@ async def admin_permission_update_handler(
         for permission in ADMIN_PERMISSION_REGISTRY
         if permission.key in actor_permissions
     ]
-    await callback.message.edit_reply_markup(
-        reply_markup=managed_permission_keyboard(callback_data.telegram_id, permissions, current)
+    await edit_reply_markup_if_changed(
+        message=callback.message,
+        reply_markup=managed_permission_keyboard(callback_data.telegram_id, permissions, current),
     )
     await callback.answer("دسترسی به‌روزرسانی شد.")
 
@@ -187,8 +193,9 @@ async def admin_permission_update_handler(
 @router.callback_query(AdminManagementCallback.filter(F.action == "create"))
 async def admin_create_start_handler(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminManagementStates.waiting_for_admin_id)
-    await callback.message.edit_text(
-        "➕ افزودن ادمین\n\nشناسه عددی Telegram کاربر را ارسال کنید."
+    await edit_message_if_changed(
+        message=callback.message,
+        text="➕ افزودن ادمین\n\nشناسه عددی Telegram کاربر را ارسال کنید.",
     )
     await callback.answer()
 
@@ -258,8 +265,9 @@ async def admin_permission_toggle_handler(
         for permission in ADMIN_PERMISSION_REGISTRY
         if permission.key in actor_permissions
     ]
-    await callback.message.edit_reply_markup(
-        reply_markup=permission_selection_keyboard(permissions, selected)
+    await edit_reply_markup_if_changed(
+        message=callback.message,
+        reply_markup=permission_selection_keyboard(permissions, selected),
     )
     await callback.answer()
 
@@ -295,8 +303,9 @@ async def admin_create_confirm_handler(
     await notification_service.admin_added(admin.telegram_id)
     await set_admin_commands(callback.bot, admin.telegram_id)
     await state.clear()
-    await callback.message.edit_text(
-        f"✅ ادمین {admin.telegram_id} با موفقیت اضافه شد.",
+    await edit_message_if_changed(
+        message=callback.message,
+        text=f"✅ ادمین {admin.telegram_id} با موفقیت اضافه شد.",
         reply_markup=admin_management_keyboard(),
     )
     await callback.answer()
@@ -305,7 +314,7 @@ async def admin_create_confirm_handler(
 @router.callback_query(AdminCreateCancelCallback.filter())
 async def admin_create_cancel_handler(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await callback.message.edit_text("🛡 مدیریت ادمین‌ها", reply_markup=admin_management_keyboard())
+    await edit_message_if_changed(message=callback.message, text="🛡 مدیریت ادمین‌ها", reply_markup=admin_management_keyboard())
     await callback.answer("لغو شد.")
 
 
@@ -327,7 +336,7 @@ async def admin_deactivate_handler(
         await remove_admin_commands(callback.bot, callback_data.telegram_id)
         admin = await admin_service.get_admin(callback_data.telegram_id)
         if admin:
-            await callback.message.edit_reply_markup(reply_markup=admin_detail_keyboard(admin))
+            await edit_reply_markup_if_changed(message=callback.message, reply_markup=admin_detail_keyboard(admin))
 
 
 @router.callback_query(AdminManagementCallback.filter(F.action == "activate"))
@@ -348,7 +357,7 @@ async def admin_activate_handler(
         await set_admin_commands(callback.bot, callback_data.telegram_id)
         admin = await admin_service.get_admin(callback_data.telegram_id)
         if admin:
-            await callback.message.edit_reply_markup(reply_markup=admin_detail_keyboard(admin))
+            await edit_reply_markup_if_changed(message=callback.message, reply_markup=admin_detail_keyboard(admin))
 
 
 @router.callback_query(AdminManagementCallback.filter(F.action == "delete"))
@@ -368,7 +377,8 @@ async def admin_delete_handler(
     if removed:
         await remove_admin_commands(callback.bot, callback_data.telegram_id)
         admins = list(await admin_service.list_admins())
-        await callback.message.edit_text(
-            "👥 فهرست ادمین‌ها",
+        await edit_message_if_changed(
+            message=callback.message,
+            text="👥 فهرست ادمین‌ها",
             reply_markup=await _admin_list_keyboard(callback, admins),
         )

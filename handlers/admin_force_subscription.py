@@ -2,6 +2,7 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 
+from core.telegram import edit_message_if_changed
 from filters.admin import AdminPermissionFilter
 from models.force_subscription import ForceSubscriptionTarget, ForceSubscriptionTargetType
 from services.force_subscription import ForceSubscriptionService
@@ -119,9 +120,9 @@ async def _show_management(callback: CallbackQuery, service: ForceSubscriptionSe
     targets = await service.list_all_targets()
     text = _management_text(targets)
     keyboard = admin_force_subscription_list_keyboard(targets)
-    if callback.message is not None:
-        if callback.message.text != text or callback.message.reply_markup != keyboard:
-            await callback.message.edit_text(text, reply_markup=keyboard)
+    await edit_message_if_changed(
+        message=callback.message, text=text, reply_markup=keyboard
+    )
     await callback.answer()
 
 

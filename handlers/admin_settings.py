@@ -1,6 +1,7 @@
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
+from core.telegram import edit_message_if_changed
 from filters.admin import AdminPermissionFilter
 from keyboards.admin_settings import admin_settings_keyboard
 from models.bot_settings import BotSettings
@@ -45,9 +46,9 @@ async def toggle_force_subscription_handler(callback: CallbackQuery, bot_setting
 async def _update_settings_message(callback: CallbackQuery, settings: BotSettings, answer_text: str) -> None:
     text = _settings_text(settings)
     keyboard = admin_settings_keyboard(settings)
-    if callback.message is not None:
-        if callback.message.text != text or callback.message.reply_markup != keyboard:
-            await callback.message.edit_text(text, reply_markup=keyboard)
+    await edit_message_if_changed(
+        message=callback.message, text=text, reply_markup=keyboard
+    )
     await callback.answer(answer_text)
 
 

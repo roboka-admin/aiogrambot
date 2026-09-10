@@ -5,6 +5,7 @@ from callbacks.admin_support import (
     AdminSupportSettingsBackCallback,
     AdminSupportSettingsCallback,
 )
+from core.telegram import edit_message_if_changed
 from filters.admin import AdminPermissionFilter
 from keyboards.admin_support import (
     support_overview_keyboard,
@@ -22,8 +23,9 @@ router.callback_query.filter(AdminPermissionFilter("support"))
 async def support_settings_handler(
     callback: CallbackQuery,
 ) -> None:
-    await callback.message.edit_text(
-        "⚙️ تنظیمات پشتیبانی\n\n"
+    await edit_message_if_changed(
+        message=callback.message,
+        text="⚙️ تنظیمات پشتیبانی\n\n"
         "عملیات مورد نظر را انتخاب کنید:",
         reply_markup=support_settings_keyboard(),
     )
@@ -38,8 +40,9 @@ async def support_settings_back_handler(
     open_users = await support_service.get_support_users_by_status(SupportStatus.OPEN)
     closed_users = await support_service.get_support_users_by_status(SupportStatus.CLOSED)
 
-    await callback.message.edit_text(
-        "📩 مدیریت پشتیبانی\n\n"
+    await edit_message_if_changed(
+        message=callback.message,
+        text="📩 مدیریت پشتیبانی\n\n"
         f"🟢 کاربران با پیام باز: {len(open_users)}\n"
         f"⚪ کاربران با پیام بسته: {len(closed_users)}\n\n"
         "یک بخش را انتخاب کنید:",

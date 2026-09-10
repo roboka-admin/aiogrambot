@@ -10,6 +10,7 @@ from callbacks.admin import (
     AdminBroadcastEditCallback,
     AdminBroadcastStartCallback,
 )
+from core.telegram import edit_message_if_changed
 from filters.admin import AdminPermissionFilter
 from keyboards.admin_broadcast import broadcast_cancel_keyboard, broadcast_preview_keyboard
 from services.broadcast import BroadcastProgress, BroadcastService
@@ -89,7 +90,7 @@ async def broadcast_message_handler(message: Message, state: FSMContext) -> None
 @router.callback_query(AdminBroadcastEditCallback.filter(), AdminBroadcastStates.waiting_confirmation)
 async def broadcast_edit_handler(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(AdminBroadcastStates.waiting_message)
-    await callback.message.edit_text("✏️ پیام قبلی کنار گذاشته شد.")
+    await edit_message_if_changed(message=callback.message, text="✏️ پیام قبلی کنار گذاشته شد.")
     await callback.message.answer(
         "✏️ <b>پیام جدید را ارسال کنید.</b>\n\n"
         "در هر زمان می‌توانید با دکمه «❌ لغو» عملیات را متوقف کنید.",
@@ -102,7 +103,7 @@ async def broadcast_edit_handler(callback: CallbackQuery, state: FSMContext) -> 
 @router.callback_query(AdminBroadcastCancelCallback.filter(), AdminBroadcastStates.waiting_confirmation)
 async def broadcast_cancel_callback_handler(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await callback.message.edit_text("❌ ارسال همگانی لغو شد.")
+    await edit_message_if_changed(message=callback.message, text="❌ ارسال همگانی لغو شد.")
     await callback.answer("لغو شد")
 
 
@@ -118,7 +119,7 @@ async def broadcast_confirm_handler(
 
     if from_chat_id is None or message_id is None:
         await state.clear()
-        await callback.message.edit_text("❌ پیام یافت نشد. لطفاً دوباره تلاش کنید.")
+        await edit_message_if_changed(message=callback.message, text="❌ پیام یافت نشد. لطفاً دوباره تلاش کنید.")
         await callback.answer()
         return
 
@@ -127,15 +128,16 @@ async def broadcast_confirm_handler(
 
     recipient_count = await broadcast_service.count_recipients()
     if recipient_count == 0:
-        await callback.message.edit_text("❌ هیچ کاربر فعالی برای ارسال پیام وجود ندارد.")
+        await edit_message_if_changed(message=callback.message, text="❌ هیچ کاربر فعالی برای ارسال پیام وجود ندارد.")
         return
 
-    await callback.message.edit_text(_progress_text(0, recipient_count, 0, 0, 0, None), parse_mode="HTML")
+    await edit_message_if_changed(message=callback.message, text=_progress_text(0, recipient_count, 0, 0, 0, None), parse_mode="HTML")
 
     async def update_progress(progress: BroadcastProgress) -> None:
         try:
-            await callback.message.edit_text(
-                _progress_text(
+            await edit_message_if_changed(
+                message=callback.message,
+                text=_progress_text(
                     progress.processed,
                     progress.total,
                     progress.success,
@@ -155,8 +157,9 @@ async def broadcast_confirm_handler(
         progress_interval=PROGRESS_UPDATE_INTERVAL,
     )
 
-    await callback.message.edit_text(
-        "✅ <b>ارسال همگانی پایان یافت</b>\n\n"
+    await edit_message_if_changed(
+        message=callback.message,
+        text="✅ <b>ارسال همگانی پایان یافت</b>\n\n"
         f"👥 کل کاربران هدف: <b>{result.total}</b>\n"
         f"✅ ارسال موفق: <b>{result.success}</b>\n"
         f"❌ ناموفق: <b>{result.failed}</b>\n"
