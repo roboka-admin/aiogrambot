@@ -1,6 +1,6 @@
 """Add admin-configurable referral reward (coins per N registered invites).
 
-Revision ID: 0009_add_referral_reward_settings
+Revision ID: 0009_add_referral_reward
 Revises: 0008_add_referral_pending_code
 Create Date: 2026-09-10
 """
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = "0009_add_referral_reward_settings"
+revision: str = "0009_add_referral_reward"
 down_revision: Union[str, Sequence[str], None] = "0008_add_referral_pending_code"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

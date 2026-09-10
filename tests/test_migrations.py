@@ -70,6 +70,25 @@ def _get_test_database_url() -> str:
     return database_url
 
 
+def test_revision_ids_fit_alembic_version_column() -> None:
+    """Alembic stores the current revision in ``alembic_version.version_num``,
+    a VARCHAR(32). A longer id passes ``--sql`` rendering but fails at runtime
+    with "Data too long for column 'version_num'" *after* the DDL already ran,
+    leaving MySQL half-migrated. Runs without a database on purpose.
+    """
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    script = ScriptDirectory.from_config(Config("alembic.ini"))
+    too_long = [
+        revision.revision
+        for revision in script.walk_revisions()
+        if len(revision.revision) > 32
+    ]
+
+    assert too_long == [], f"revision ids longer than 32 chars: {too_long}"
+
+
 @pytest.mark.asyncio
 async def test_initial_migration_builds_test_database_from_empty_schema() -> None:
     """Verify the real Alembic migration chain can build the dedicated test DB from scratch."""
@@ -88,7 +107,7 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
         assert "0006_admin_foundation -> 0007_add_referrals" in output
         assert "0007_add_referrals -> 0008_add_referral_pending_code" in output
         assert (
-            "0008_add_referral_pending_code -> 0009_add_referral_reward_settings"
+            "0008_add_referral_pending_code -> 0009_add_referral_reward"
             in output
         )
 
@@ -140,7 +159,7 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
             "referral_processed_at",
             "referral_pending_code",
         }.issubset(user_columns)
-        assert revision == "0009_add_referral_reward_settings"
+        assert revision == "0009_add_referral_reward"
         assert settings_count == 1
         assert antispam_enabled == 1
         assert force_subscription_enabled == 0
@@ -201,6 +220,6 @@ async def test_referral_migration_widens_legacy_int_telegram_id() -> None:
 
         assert telegram_id_type.lower() == "bigint"
         assert "fk_users_referred_by_user_id" in foreign_keys
-        assert revision == "0009_add_referral_reward_settings"
+        assert revision == "0009_add_referral_reward"
     finally:
         await engine.dispose()
