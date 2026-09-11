@@ -4,7 +4,9 @@ import pytest
 
 from core.timezone import tehran_now
 from models.referral_reward import ReferralRewardEntry
+from models.user import User
 from repositories.referral_reward import ReferralRewardRepository
+from repositories.user import UserRepository
 
 
 def make_entry(referrer_id: int, *, coins: int, invites: int, triggered_by: int = 99):
@@ -50,3 +52,26 @@ async def test_referral_reward_repository_lists_most_recent_first(session):
     recent = await repository.list_recent(limit=2)
 
     assert [entry.triggered_by_user_id for entry in recent] == [12, 11]
+
+
+@pytest.mark.asyncio
+async def test_referral_reward_repository_history_resolves_names_and_tolerates_missing_users(
+    session,
+):
+    users = UserRepository(session)
+    # Referrer has a registered name; the triggered user only has a Telegram name.
+    await users.create(User(telegram_id=1, telegram_name="Referrer TG", name="Ali"))
+    await users.create(User(telegram_id=10, telegram_name="Sara TG"))
+    repository = ReferralRewardRepository(session)
+    await repository.create(make_entry(1, coins=5, invites=3, triggered_by=10))
+    # Payout for a user that no longer exists in the users table.
+    await repository.create(make_entry(999, coins=1, invites=1, triggered_by=998))
+
+    history = await repository.list_recent_with_names(limit=10)
+
+    assert len(history) == 2
+    orphan, named = history  # most recent first
+    assert orphan.entry.referrer_id == 999
+    assert (orphan.referrer_name, orphan.triggered_by_name) == (None, None)
+    assert named.referrer_name == "Ali"
+    assert named.triggered_by_name == "Sara TG"

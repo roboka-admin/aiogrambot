@@ -12,7 +12,8 @@ from keyboards.admin_referral_reward import (
 )
 from keyboards.admin_settings import admin_settings_keyboard
 from models.bot_settings import BotSettings
-from models.referral_reward import ReferralRewardEntry
+from core.display import user_display_name
+from models.referral_reward import ReferralRewardHistoryItem
 from services.bot_settings import BotSettingsService
 from services.referral import ReferralService
 from states.admin import AdminSettingsStates
@@ -210,16 +211,23 @@ def _reward_editor_text(settings: BotSettings) -> str:
     )
 
 
-def _reward_history_text(entries: list[ReferralRewardEntry]) -> str:
+def _reward_history_text(items: list[ReferralRewardHistoryItem]) -> str:
     lines = ["📜 آخرین پاداش‌های پرداخت‌شده\n"]
-    if not entries:
+    if not items:
         lines.append("هنوز پاداشی پرداخت نشده است.")
         return "\n".join(lines)
-    for entry in entries:
+    for item in items:
+        entry = item.entry
         when = entry.created_at.strftime("%Y-%m-%d %H:%M")
+        referrer = user_display_name(
+            name=item.referrer_name, telegram_id=entry.referrer_id
+        )
+        triggered_by = user_display_name(
+            name=item.triggered_by_name, telegram_id=entry.triggered_by_user_id
+        )
         lines.append(
-            f"• {when} — کاربر {entry.referrer_id}: {entry.coins} سکه"
-            f" (بابت {entry.invites_consumed} دعوت، آخرین: {entry.triggered_by_user_id})"
+            f"• {when} — {referrer}: {entry.coins} سکه"
+            f" (بابت {entry.invites_consumed} دعوت؛ آخرین: {triggered_by})"
         )
     return "\n".join(lines)
 

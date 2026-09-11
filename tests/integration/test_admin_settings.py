@@ -5,6 +5,7 @@ import pytest
 from callbacks.admin import AdminReferralRewardCallback
 from handlers.admin_settings import (
     _parse_reward_input,
+    _reward_history_text,
     _update_settings_message,
     referral_reward_manual_input_handler,
     referral_reward_preset_handler,
@@ -13,6 +14,7 @@ from handlers.admin_settings import (
 from keyboards.admin_referral_reward import admin_referral_reward_keyboard
 from keyboards.admin_settings import admin_settings_keyboard
 from models.bot_settings import BotSettings
+from models.referral_reward import ReferralRewardEntry, ReferralRewardHistoryItem
 
 
 @pytest.mark.asyncio
@@ -224,3 +226,27 @@ async def test_manual_input_rejects_bad_format_and_keeps_state() -> None:
     service.set_referral_reward.assert_not_awaited()
     state.clear.assert_not_called()
     assert message.answer.await_args.args[0].startswith("❌")
+
+
+def test_reward_history_shows_names_and_falls_back_to_id() -> None:
+    from datetime import datetime
+
+    entry = ReferralRewardEntry(
+        id=1,
+        referrer_id=7,
+        triggered_by_user_id=42,
+        coins=5,
+        invites_consumed=3,
+        created_at=datetime(2026, 9, 11, 10, 30),
+    )
+    named = ReferralRewardHistoryItem(entry=entry, referrer_name="Ali", triggered_by_name="Sara")
+    orphan = ReferralRewardHistoryItem(entry=entry, referrer_name=None, triggered_by_name=None)
+
+    text = _reward_history_text([named, orphan])
+
+    assert "2026-09-11 10:30 — Ali: 5 سکه (بابت 3 دعوت؛ آخرین: Sara)" in text
+    assert "ID: 7: 5 سکه (بابت 3 دعوت؛ آخرین: ID: 42)" in text
+
+
+def test_reward_history_empty_state() -> None:
+    assert "هنوز پاداشی پرداخت نشده است." in _reward_history_text([])

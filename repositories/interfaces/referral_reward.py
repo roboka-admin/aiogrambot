@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Protocol
 
-from models.referral_reward import ReferralRewardEntry
+from models.referral_reward import ReferralRewardEntry, ReferralRewardHistoryItem
 
 
 class IReferralRewardRepository(Protocol):
@@ -12,3 +12,6 @@ class IReferralRewardRepository(Protocol):
     async def count_total(self) -> int: ...
     async def count_since(self, since: datetime) -> int: ...
     async def list_recent(self, *, limit: int) -> list[ReferralRewardEntry]: ...
+    async def list_recent_with_names(
+        self, *, limit: int
+    ) -> list[ReferralRewardHistoryItem]: ...

@@ -2,9 +2,11 @@ from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
-from models.referral_reward import ReferralRewardEntry
+from models.referral_reward import ReferralRewardEntry, ReferralRewardHistoryItem
 from models.referral_reward_db import ReferralRewardRecord
+from models.user_db import UserRecord
 from repositories.interfaces.referral_reward import IReferralRewardRepository
 
 
@@ -65,6 +67,45 @@ class ReferralRewardRepository(IReferralRewardRepository):
             .limit(limit)
         )
         return [self._to_domain(record) for record in result.scalars()]
+
+    async def list_recent_with_names(
+        self, *, limit: int
+    ) -> list[ReferralRewardHistoryItem]:
+        # The ledger references users twice (who got paid, whose registration
+        # triggered it), so the users table is joined under two aliases.
+        # Outer joins keep the payout visible even if a user row is gone.
+        referrer = aliased(UserRecord)
+        triggered_by = aliased(UserRecord)
+        result = await self._session.execute(
+            select(
+                ReferralRewardRecord,
+                referrer.name,
+                referrer.telegram_name,
+                triggered_by.name,
+                triggered_by.telegram_name,
+            )
+            .outerjoin(referrer, referrer.telegram_id == ReferralRewardRecord.referrer_id)
+            .outerjoin(
+                triggered_by,
+                triggered_by.telegram_id == ReferralRewardRecord.triggered_by_user_id,
+            )
+            .order_by(ReferralRewardRecord.created_at.desc(), ReferralRewardRecord.id.desc())
+            .limit(limit)
+        )
+        return [
+            ReferralRewardHistoryItem(
+                entry=self._to_domain(record),
+                referrer_name=referrer_name or referrer_telegram_name,
+                triggered_by_name=triggered_name or triggered_telegram_name,
+            )
+            for (
+                record,
+                referrer_name,
+                referrer_telegram_name,
+                triggered_name,
+                triggered_telegram_name,
+            ) in result.all()
+        ]
 
     @staticmethod
     def _to_domain(record: ReferralRewardRecord) -> ReferralRewardEntry:

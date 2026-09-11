@@ -8,7 +8,7 @@ from core.timezone import tehran_now
 from core.transaction import NullTransactionManager, TransactionManager, transactional
 from exceptions.user import UserNotFoundError
 from models.bot_settings import BotSettings
-from models.referral_reward import ReferralRewardEntry
+from models.referral_reward import ReferralRewardEntry, ReferralRewardHistoryItem
 from models.user import User, UserStatus
 from repositories.interfaces.bot_settings import IBotSettingsRepository
 from repositories.interfaces.referral import IReferralRepository
@@ -233,8 +233,10 @@ class ReferralService:
         )
 
     @transactional
-    async def get_recent_rewards(self, *, limit: int = 10) -> list[ReferralRewardEntry]:
-        return await self._referral_reward_repository.list_recent(limit=limit)
+    async def get_recent_rewards(
+        self, *, limit: int = 10
+    ) -> list[ReferralRewardHistoryItem]:
+        return await self._referral_reward_repository.list_recent_with_names(limit=limit)
 
     @transactional
     async def get_referral_count(self, telegram_id: int) -> int:

@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy import BigInteger
 
 from models.bot_settings import BotSettings
-from models.referral_reward import ReferralRewardEntry
+from models.referral_reward import ReferralRewardEntry, ReferralRewardHistoryItem
 from models.user import RegistrationStatus, User
 from models.user_db import UserRecord
 from services.referral import ReferralService
@@ -171,6 +171,12 @@ class FakeReferralRewardRepository:
 
     async def list_recent(self, *, limit: int) -> list[ReferralRewardEntry]:
         return list(reversed(self.entries))[:limit]
+
+    async def list_recent_with_names(self, *, limit: int) -> list[ReferralRewardHistoryItem]:
+        return [
+            ReferralRewardHistoryItem(entry=entry, referrer_name=None, triggered_by_name=None)
+            for entry in await self.list_recent(limit=limit)
+        ]
 
 
 @pytest.fixture
