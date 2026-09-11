@@ -67,10 +67,6 @@ class ServicesMiddleware(BaseMiddleware):
                             BroadcastRepository(broadcast_session),
                         )
 
-            register_service = RegisterService(
-                user_repository=user_repository,
-                transaction_manager=transaction_manager,
-            )
             user_service = UserService(
                 user_repository=user_repository,
                 transaction_manager=transaction_manager,
@@ -108,6 +104,14 @@ class ServicesMiddleware(BaseMiddleware):
                 referral_repository=referral_repository,
                 referral_reward_repository=referral_reward_repository,
                 bot_settings_repository=bot_settings_repository,
+                transaction_manager=transaction_manager,
+            )
+            # Shares the referral service (and thus the same session and
+            # transaction manager) so the referral payout joins the
+            # registration transaction instead of committing separately.
+            register_service = RegisterService(
+                user_repository=user_repository,
+                referral_service=referral_service,
                 transaction_manager=transaction_manager,
             )
 

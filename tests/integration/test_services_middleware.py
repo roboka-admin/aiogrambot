@@ -77,6 +77,7 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
 
     mocks["RegisterService"].assert_called_once_with(
         user_repository=mocks["UserRepository"].return_value,
+        referral_service=mocks["ReferralService"].return_value,
         transaction_manager=transaction_manager,
     )
     mocks["UserService"].assert_called_once_with(

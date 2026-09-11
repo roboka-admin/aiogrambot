@@ -9,7 +9,6 @@ from keyboards.register import cancel_register
 from keyboards.start import start_keyboard
 from models.user import RegistrationStatus, User
 from services.notification import NotificationService
-from services.referral import ReferralService
 from services.register import RegisterService
 from states.register import RegisterStates
 from validators.register import validate_age, validate_name
@@ -53,7 +52,6 @@ async def process_age(
     message: Message,
     state: FSMContext,
     register_service: RegisterService,
-    referral_service: ReferralService,
     notification_service: NotificationService,
 ) -> None:
     if not validate_age(message.text):
@@ -61,22 +59,23 @@ async def process_age(
         return
     data = await state.get_data()
     try:
-        user = await register_service.register(telegram_id=message.from_user.id, name=data["name"], age=int(message.text))
+        result = await register_service.register(
+            telegram_id=message.from_user.id, name=data["name"], age=int(message.text)
+        )
     except UserAlreadyExistsError:
         await message.answer("❌ شما قبلاً ثبت نام کرده‌اید.")
         await state.clear()
         return
     await state.clear()
+    user = result.user
     await message.answer(
         f"✅ ثبت نام با موفقیت انجام شد.\n\n👤 نام: {user.name}\n🎂 سن: {user.age}",
         reply_markup=main_menu,
     )
 
-    # Registration is what earns the referrer their reward (not the /start),
-    # so the threshold check happens here, after the user is persisted.
-    reward = await referral_service.reward_referrer_for_registration(
-        registered_user=user
-    )
+    # The payout itself was already committed together with the
+    # registration; only the (best-effort) notification happens here.
+    reward = result.referral_reward
     if reward is not None:
         await notification_service.referral_reward_earned(
             reward.referrer_id,
