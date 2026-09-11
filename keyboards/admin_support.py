@@ -212,6 +212,23 @@ def support_notification_reply_keyboard(*, telegram_id: int) -> InlineKeyboardMa
     )
 
 
+def support_reply_sent_keyboard(*, telegram_id: int) -> InlineKeyboardMarkup:
+    """Shown under the "reply sent" confirmation so the admin can close right away."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[
+            InlineKeyboardButton(
+                text="🔒 بستن گفتگو",
+                callback_data=AdminSupportActionCallback(
+                    action="close_after_reply",
+                    telegram_id=telegram_id,
+                    status=SupportStatus.OPEN.value,
+                    page=0,
+                ).pack(),
+            )
+        ]]
+    )
+
+
 def support_cleanup_confirm_keyboard(*, action: CleanupAction) -> InlineKeyboardMarkup:
     confirm_text = (
         "🗑 بله، حذف تیکت‌های بسته"

@@ -24,6 +24,7 @@ from keyboards.admin_support import (
     admin_support_reply_cancel_keyboard,
     support_cleanup_confirm_keyboard,
     support_overview_keyboard,
+    support_reply_sent_keyboard,
     support_ticket_reply_keyboard,
     support_user_messages_keyboard,
     support_users_keyboard,
@@ -147,7 +148,35 @@ async def send_support_reply_handler(message: Message, state: FSMContext, bot: B
         return
 
     await state.clear()
+    # ReplyKeyboardRemove and an inline keyboard cannot share one message,
+    # so the reply keyboard is dropped first and the confirmation carries
+    # the inline "close" shortcut.
     await message.answer("✅ پاسخ با موفقیت برای کاربر ارسال شد.", reply_markup=ReplyKeyboardRemove())
+    await message.answer(
+        "می‌خواهید این گفتگو را ببندید؟",
+        reply_markup=support_reply_sent_keyboard(telegram_id=telegram_id),
+    )
+
+
+@router.callback_query(AdminSupportActionCallback.filter(F.action == "close_after_reply"))
+async def close_after_reply_handler(
+    callback: CallbackQuery,
+    callback_data: AdminSupportActionCallback,
+    support_service: SupportService,
+) -> None:
+    """Close the conversation from the post-reply prompt without leaving the chat flow.
+
+    Deliberately separate from ``change_support_conversation_status_handler``:
+    that one redraws the admin-panel conversation screen, which would be
+    jarring here. This only reuses the service call and collapses the prompt.
+    """
+    await support_service.close_user_conversation(callback_data.telegram_id)
+    await edit_message_if_changed(
+        message=callback.message,
+        text="🔒 گفتگو بسته شد.",
+        reply_markup=None,
+    )
+    await callback.answer("گفتگو بسته شد.")
 
 
 @router.callback_query(AdminSupportActionCallback.filter(F.action.in_({"close", "reopen"})))
