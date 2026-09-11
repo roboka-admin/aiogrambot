@@ -13,6 +13,7 @@ from callbacks.admin import (
     AdminUserCallback,
     AdminUsersCallback,
 )
+from core.display import user_status_label
 from core.telegram import edit_message_if_changed
 from exceptions.user import UserNotFoundError
 from filters.admin import AdminFilter, AdminPermissionFilter
@@ -433,5 +434,5 @@ def _user_details_text(user: User) -> str:
         f"شناسه: {user.telegram_id}\n"
         f"سکه: {user.coins}\n"
         f"اخطار: {user.warnings}\n"
-        f"وضعیت: {user.status.value}"
+        f"وضعیت: {user_status_label(user.status)}"
     )

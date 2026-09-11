@@ -4,6 +4,7 @@ asyncmy
 pymysql
 alembic
 python-dotenv
+jdatetime
 psutil
 pytest
 pytest-asyncio
