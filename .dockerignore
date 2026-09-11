@@ -1,0 +1,30 @@
+# VCS and editor state
+.git
+.gitignore
+.github
+.vscode
+.continue
+.zcode
+
+# Secrets: configuration comes from Northflank environment variables
+.env
+*.env
+
+# Local Python artifacts
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.db
+
+# Not needed at runtime
+tests/
+pytest.ini
+AGENTS.md
+CLAUDE.md
+README*
+Dockerfile
+.dockerignore
