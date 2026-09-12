@@ -19,7 +19,7 @@ class LoggingMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        logger.info("Update received: %s", type(event).__name__)
+        logger.debug("Update received: %s", type(event).__name__)
         if self._system_service:
             self._system_service.record_update()
 

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from collections.abc import Iterable
 
 from aiogram import Bot, Dispatcher
@@ -61,8 +62,13 @@ async def bootstrap_admin_system(database: Database) -> Iterable[int]:
 
 async def main() -> None:
     logging.basicConfig(
-        level=logging.INFO,
+        level=os.getenv("LOG_LEVEL", "INFO").upper(),
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    )
+    # aiogram logs one "Update ... is handled" line per update at INFO;
+    # keep only warnings/errors from it unless debugging.
+    logging.getLogger("aiogram.event").setLevel(
+        os.getenv("AIOGRAM_EVENT_LOG_LEVEL", "WARNING").upper()
     )
 
     logging.info("Bot starting...")
