@@ -8,6 +8,7 @@ from config import ADMIN_IDS, BOT_TOKEN, DATABASE_URL
 from core.commands import setup_bot_commands
 from core.database import Database
 from core.errors import handle_error
+from core.health import start_health_server, stop_health_server
 from core.transaction import SessionTransactionManager
 from handlers.admin import router as admin_router
 from handlers.admin_broadcast import router as admin_broadcast_router
@@ -72,6 +73,7 @@ async def main() -> None:
 
     database = Database(database_url=DATABASE_URL)
     system_service = SystemService(database=database)
+    health_runner = await start_health_server()
 
     try:
         active_admin_ids = await bootstrap_admin_system(database)
@@ -109,6 +111,7 @@ async def main() -> None:
 
         await dp.start_polling(bot)
     finally:
+        await stop_health_server(health_runner)
         await database.dispose()
 
 
