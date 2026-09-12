@@ -6,6 +6,7 @@ from alembic import context
 from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
+from core.database_url import build_connection_config
 from models.base import Base
 from models.antispam_db import AntiSpamEventRecord
 from models.bot_settings_db import BotSettingsRecord
@@ -49,8 +50,14 @@ def get_database_url() -> str:
     return url
 
 
-url = get_database_url()
-config.set_main_option("sqlalchemy.url", url.replace("+asyncmy", "+pymysql"))
+# Alembic runs synchronously, so swap the async driver for pymysql. This also
+# strips cloud-style ``?ssl-mode=...`` parameters that the driver rejects and
+# turns them into ``connect_args``.
+connection_config = build_connection_config(get_database_url(), driver="pymysql")
+config.set_main_option(
+    "sqlalchemy.url",
+    connection_config.url.render_as_string(hide_password=False).replace("%", "%%"),
+)
 target_metadata = Base.metadata
 
 
@@ -70,6 +77,7 @@ def run_migrations_online() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=connection_config.connect_args,
     )
 
     with connectable.connect() as connection:

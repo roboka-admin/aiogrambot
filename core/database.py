@@ -4,15 +4,19 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from core.database_url import build_connection_config
+
 
 class Database:
     """Own the database engine and create request-scoped sessions."""
 
     def __init__(self, database_url: str) -> None:
+        connection_config = build_connection_config(database_url, driver="asyncmy")
         self.engine = create_async_engine(
-            database_url,
+            connection_config.url,
             echo=False,
             pool_pre_ping=True,
+            connect_args=connection_config.connect_args,
         )
         self.session_factory = async_sessionmaker(
             bind=self.engine,
