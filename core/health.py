@@ -34,7 +34,7 @@ async def start_health_server() -> web.AppRunner | None:
     app.router.add_get("/", _healthcheck)
     app.router.add_get("/health", _healthcheck)
 
-    runner = web.AppRunner(app)
+    runner = web.AppRunner(app, access_log=None)
     await runner.setup()
     site = web.TCPSite(runner, host="0.0.0.0", port=int(port_value))
     await site.start()
