@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import psutil
 
+from core.cgroup import read_cgroup_memory
 from core.timezone import tehran_now
 
 if TYPE_CHECKING:
@@ -34,6 +35,8 @@ class SystemStats:
     database_healthy: bool
     db_table_count: int
     db_row_count: int | None = None
+    db_latency_ms: float | None = None
+    db_size_mb: float | None = None
 
 
 class SystemService:
@@ -57,13 +60,24 @@ class SystemService:
         db_healthy = False
         db_table_count = 0
         db_row_count: int | None = None
+        db_latency_ms: float | None = None
+        db_size_mb: float | None = None
 
         if self._database:
             try:
+                db_latency_ms = await self._database.ping()
                 db_table_count, db_row_count = await self._database.get_db_stats()
                 db_healthy = True
             except Exception:
                 logger.exception("Failed to collect database statistics")
+            else:
+                try:
+                    size_bytes = await self._database.get_db_size_bytes()
+                except Exception:
+                    logger.exception("Failed to collect database size")
+                else:
+                    if size_bytes is not None:
+                        db_size_mb = round(size_bytes / (1024**2), 2)
 
         cpu_percent = self._cpu_percent()
         memory_info = self._memory_info()
@@ -86,6 +100,8 @@ class SystemService:
             database_healthy=db_healthy,
             db_table_count=db_table_count,
             db_row_count=db_row_count,
+            db_latency_ms=db_latency_ms,
+            db_size_mb=db_size_mb,
         )
 
     @staticmethod
@@ -98,6 +114,15 @@ class SystemService:
 
     @staticmethod
     def _memory_info() -> tuple[int, int, float] | None:
+        # Inside a container the cgroup limit is the real ceiling; psutil
+        # would report the host machine instead.
+        cgroup = read_cgroup_memory()
+        if cgroup is not None:
+            return (
+                cgroup.used_bytes // (1024**2),
+                cgroup.limit_bytes // (1024**2),
+                cgroup.percent,
+            )
         try:
             memory = psutil.virtual_memory()
             return (

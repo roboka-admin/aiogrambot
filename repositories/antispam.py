@@ -62,6 +62,17 @@ class AntiSpamRepository(IAntiSpamRepository):
         )
         return result.scalar_one()
 
+    async def count_since(self, since: datetime, event_type: AntiSpamEventType) -> int:
+        result = await self._session.execute(
+            select(func.count())
+            .select_from(AntiSpamEventRecord)
+            .where(
+                AntiSpamEventRecord.created_at >= since,
+                AntiSpamEventRecord.event_type == event_type,
+            )
+        )
+        return result.scalar_one()
+
     @staticmethod
     def _to_domain(record: AntiSpamEventRecord) -> AntiSpamEvent:
         return AntiSpamEvent(

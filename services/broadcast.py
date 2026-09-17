@@ -10,7 +10,12 @@ from core.timezone import tehran_now
 from models.broadcast import BroadcastRecord
 from repositories.interfaces.broadcast import IBroadcastRepository
 from repositories.interfaces.user import IUserRepository
-from services.telegram import TelegramGateway, TelegramGatewayError, TelegramRateLimitError
+from services.telegram import (
+    TelegramAccessError,
+    TelegramGateway,
+    TelegramGatewayError,
+    TelegramRateLimitError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -181,6 +186,7 @@ class BroadcastService:
         total = len(telegram_ids)
         success = 0
         failed = 0
+        blocked_bot_ids: list[int] = []
         started_at = time.monotonic()
 
         for processed, telegram_id in enumerate(telegram_ids, start=1):
@@ -191,6 +197,11 @@ class BroadcastService:
                     message_id=message_id,
                 )
                 success += 1
+            except TelegramAccessError as exc:
+                # Forbidden/not found: the user blocked or deleted the bot.
+                failed += 1
+                blocked_bot_ids.append(telegram_id)
+                logger.info("Broadcast skipped user %s (bot blocked): %s", telegram_id, exc)
             except TelegramGatewayError as exc:
                 failed += 1
                 logger.warning("Broadcast failed for user %s: %s", telegram_id, exc)
@@ -221,7 +232,10 @@ class BroadcastService:
             duration_seconds=round(time.monotonic() - started_at),
         )
 
-        async with self._repositories() as (_, broadcast_repository):
+        async with self._repositories() as (user_repository, broadcast_repository):
+            blocked_at = tehran_now()
+            for telegram_id in blocked_bot_ids:
+                await user_repository.set_bot_blocked(telegram_id, blocked_at)
             await broadcast_repository.create(
                 BroadcastRecord(
                     id=None,

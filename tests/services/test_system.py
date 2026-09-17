@@ -9,6 +9,12 @@ class FakeDatabase:
     async def get_db_stats(self):
         return 4, 12
 
+    async def ping(self) -> float:
+        return 12.5
+
+    async def get_db_size_bytes(self) -> int | None:
+        return 3 * 1024 * 1024
+
 
 @pytest.mark.asyncio
 async def test_system_statistics_collects_bot_and_database_metrics():
@@ -22,6 +28,8 @@ async def test_system_statistics_collects_bot_and_database_metrics():
     assert stats.database_healthy is True
     assert stats.db_table_count == 4
     assert stats.db_row_count == 12
+    assert stats.db_latency_ms == 12.5
+    assert stats.db_size_mb == 3.0
     assert stats.uptime_seconds >= 0
     assert stats.current_time.tzinfo is not None
     assert stats.cpu_percent is not None
@@ -37,6 +45,9 @@ async def test_system_statistics_collects_bot_and_database_metrics():
 @pytest.mark.asyncio
 async def test_system_statistics_handles_database_failure():
     class BrokenDatabase:
+        async def ping(self) -> float:
+            raise RuntimeError("database unavailable")
+
         async def get_db_stats(self):
             raise RuntimeError("database unavailable")
 
@@ -45,6 +56,8 @@ async def test_system_statistics_handles_database_failure():
     assert stats.database_healthy is False
     assert stats.db_table_count == 0
     assert stats.db_row_count is None
+    assert stats.db_latency_ms is None
+    assert stats.db_size_mb is None
 
 
 @pytest.mark.asyncio

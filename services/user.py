@@ -41,6 +41,8 @@ class UserService:
         user.telegram_name = telegram_name
         user.username = username
         user.last_seen_at = tehran_now()
+        # Any update from the user proves the bot is no longer blocked.
+        user.bot_blocked_at = None
         return await self._save(user)
 
     @transactional

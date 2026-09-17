@@ -2,14 +2,24 @@ import asyncio
 import logging
 import os
 from collections.abc import Iterable
+from contextlib import asynccontextmanager
 
 from aiogram import Bot, Dispatcher
 
-from config import ADMIN_IDS, BOT_TOKEN, DATABASE_URL
+from config import (
+    ADMIN_IDS,
+    BOT_TOKEN,
+    DATABASE_URL,
+    MONITORING_ENABLED,
+    MONITORING_INTERVAL_SECONDS,
+)
 from core.commands import setup_bot_commands
 from core.database import Database
 from core.errors import handle_error
 from core.health import start_health_server, stop_health_server
+from core.log_buffer import ErrorLogBuffer
+from core.monitoring_runner import start_monitoring, stop_monitoring
+from core.telegram import AiogramTelegramGateway
 from core.transaction import SessionTransactionManager
 from handlers.admin import router as admin_router
 from handlers.admin_broadcast import router as admin_broadcast_router
@@ -37,8 +47,10 @@ from middlewares.services import ServicesMiddleware
 from middlewares.user import UserMiddleware
 from models.admin import AdminStatus
 from repositories.admin import AdminRepository
+from repositories.antispam import AntiSpamRepository
 from repositories.user import UserRepository
 from services.admin import AdminService
+from services.monitoring import MonitoringService
 from services.system import SystemService
 
 
@@ -60,11 +72,45 @@ async def bootstrap_admin_system(database: Database) -> Iterable[int]:
         )
 
 
+def build_monitoring_service(
+    *,
+    database: Database,
+    system_service: SystemService,
+    log_buffer: ErrorLogBuffer,
+    bot: Bot,
+) -> MonitoringService:
+    """Wire the background monitor with its own per-cycle repository scope."""
+
+    @asynccontextmanager
+    async def repository_scope():
+        async with database.get_session() as session:
+            yield UserRepository(session), AntiSpamRepository(session)
+
+    async def active_admin_ids() -> tuple[int, ...]:
+        async with database.get_session() as session:
+            admin_repository = AdminRepository(session)
+            admins = await admin_repository.list_admins()
+        return tuple(
+            admin.telegram_id for admin in admins if admin.status is AdminStatus.ACTIVE
+        )
+
+    return MonitoringService(
+        system_service=system_service,
+        log_buffer=log_buffer,
+        telegram_gateway=AiogramTelegramGateway(bot),
+        repository_factory=repository_scope,
+        admin_ids_provider=active_admin_ids,
+    )
+
+
 async def main() -> None:
     logging.basicConfig(
         level=os.getenv("LOG_LEVEL", "INFO").upper(),
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     )
+    # Keep recent warnings/errors in memory for the health monitor.
+    log_buffer = ErrorLogBuffer()
+    logging.getLogger().addHandler(log_buffer)
     # aiogram logs one "Update ... is handled" line per update at INFO;
     # keep only warnings/errors from it unless debugging.
     logging.getLogger("aiogram.event").setLevel(
@@ -80,10 +126,22 @@ async def main() -> None:
     database = Database(database_url=DATABASE_URL)
     system_service = SystemService(database=database)
     health_runner = await start_health_server()
+    monitoring_task = None
 
     try:
         active_admin_ids = await bootstrap_admin_system(database)
         await setup_bot_commands(bot, active_admin_ids)
+
+        if MONITORING_ENABLED:
+            monitoring_task = start_monitoring(
+                build_monitoring_service(
+                    database=database,
+                    system_service=system_service,
+                    log_buffer=log_buffer,
+                    bot=bot,
+                ),
+                interval_seconds=MONITORING_INTERVAL_SECONDS,
+            )
 
         dp.update.middleware(LoggingMiddleware(system_service=system_service))
         dp.update.middleware(ServicesMiddleware(database=database, system_service=system_service))
@@ -117,6 +175,7 @@ async def main() -> None:
 
         await dp.start_polling(bot)
     finally:
+        await stop_monitoring(monitoring_task)
         await stop_health_server(health_runner)
         await database.dispose()
 

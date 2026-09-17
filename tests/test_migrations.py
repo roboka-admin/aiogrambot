@@ -113,6 +113,7 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
             in output
         )
         assert "0009_add_referral_reward -> 0010_add_referral_rewards" in output
+        assert "0010_add_referral_rewards -> 0011_add_user_bot_blocked_at" in output
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
             tables = set((await session.execute(text("SHOW TABLES"))).scalars())
@@ -162,8 +163,9 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
             "referred_by_user_id",
             "referral_processed_at",
             "referral_pending_code",
+            "bot_blocked_at",
         }.issubset(user_columns)
-        assert revision == "0010_add_referral_rewards"
+        assert revision == "0011_add_user_bot_blocked_at"
         assert settings_count == 1
         assert antispam_enabled == 1
         assert force_subscription_enabled == 0
@@ -224,6 +226,6 @@ async def test_referral_migration_widens_legacy_int_telegram_id() -> None:
 
         assert telegram_id_type.lower() == "bigint"
         assert "fk_users_referred_by_user_id" in foreign_keys
-        assert revision == "0010_add_referral_rewards"
+        assert revision == "0011_add_user_bot_blocked_at"
     finally:
         await engine.dispose()

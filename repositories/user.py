@@ -2,6 +2,7 @@ from datetime import datetime
 
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, or_, select
+from sqlalchemy import update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.user import RegistrationStatus, User, UserStatus
@@ -30,6 +31,7 @@ class UserRepository(IUserRepository):
             referred_by_user_id=user.referred_by_user_id,
             referral_processed_at=user.referral_processed_at,
             referral_pending_code=user.referral_pending_code,
+            bot_blocked_at=user.bot_blocked_at,
         )
         self._session.add(record)
         await self._session.flush()
@@ -66,6 +68,7 @@ class UserRepository(IUserRepository):
         record.referred_by_user_id = user.referred_by_user_id
         record.referral_processed_at = user.referral_processed_at
         record.referral_pending_code = user.referral_pending_code
+        record.bot_blocked_at = user.bot_blocked_at
         await self._session.flush()
         return self._to_domain(record)
 
@@ -167,6 +170,19 @@ class UserRepository(IUserRepository):
             UserRecord.status == UserStatus.BLOCKED.value
         )
 
+    async def set_bot_blocked(self, telegram_id: int, blocked_at: datetime | None) -> None:
+        await self._session.execute(
+            sql_update(UserRecord)
+            .where(UserRecord.telegram_id == telegram_id)
+            .values(bot_blocked_at=blocked_at)
+        )
+
+    async def count_bot_blocked(self) -> int:
+        return await self._count_where(UserRecord.bot_blocked_at.is_not(None))
+
+    async def count_bot_blocked_since(self, since: datetime) -> int:
+        return await self._count_where(UserRecord.bot_blocked_at >= since)
+
     @staticmethod
     def _to_domain(record: UserRecord) -> User:
         return User(
@@ -185,4 +201,5 @@ class UserRepository(IUserRepository):
             referred_by_user_id=record.referred_by_user_id,
             referral_processed_at=record.referral_processed_at,
             referral_pending_code=record.referral_pending_code,
+            bot_blocked_at=record.bot_blocked_at,
         )

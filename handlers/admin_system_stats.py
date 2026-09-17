@@ -34,6 +34,8 @@ async def _show_system_statistics(*, message, system_service: SystemService) -> 
     disk = _format_disk(stats.disk_used_gb, stats.disk_total_gb, stats.disk_percent)
     database_status = "🟢 سالم" if stats.database_healthy else "🔴 خطا در اتصال"
     row_count = f"{stats.db_row_count:,}" if stats.db_row_count is not None else "—"
+    db_latency = f"{stats.db_latency_ms:.0f} ms" if stats.db_latency_ms is not None else "—"
+    db_size = f"{stats.db_size_mb:.2f} MB" if stats.db_size_mb is not None else "—"
     text = (
         "🖥️ وضعیت سیستم\n\n"
         "🤖 ربات\n\n"
@@ -49,6 +51,8 @@ async def _show_system_statistics(*, message, system_service: SystemService) -> 
         f"⏱ Uptime سرور: {server_uptime}\n\n"
         "🗃 پایگاه داده\n\n"
         f"🔌 اتصال: {database_status}\n"
+        f"⚡️ تأخیر پاسخ: {db_latency}\n"
+        f"💾 حجم داده: {db_size}\n"
         f"📋 تعداد جدول‌ها: {stats.db_table_count:,}\n"
         f"📝 تعداد رکوردها: {row_count}"
     )

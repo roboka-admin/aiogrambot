@@ -247,3 +247,20 @@ async def test_blocked_users_page_clamps_page(service_and_repository):
     assert total == 3
     assert page == 1
     assert [user.telegram_id for user in users] == [3]
+
+
+@pytest.mark.asyncio
+async def test_activity_clears_bot_blocked_flag():
+    repository = FakeUserRepository()
+    service = UserService(user_repository=repository)
+    user = await service.get_or_create_telegram_user(
+        telegram_id=5, telegram_name="A", username=None
+    )
+    user.bot_blocked_at = tehran_now()
+    repository.users[5] = user
+
+    refreshed = await service.get_or_create_telegram_user(
+        telegram_id=5, telegram_name="A", username=None
+    )
+
+    assert refreshed.bot_blocked_at is None

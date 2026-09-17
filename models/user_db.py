@@ -40,3 +40,6 @@ class UserRecord(Base):
     referral_pending_code: Mapped[str | None] = mapped_column(
         String(64), nullable=True
     )
+    bot_blocked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )

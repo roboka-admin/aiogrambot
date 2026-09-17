@@ -34,3 +34,6 @@ class User:
     referred_by_user_id: int | None = None
     referral_processed_at: datetime | None = None
     referral_pending_code: str | None = None
+    # Set when Telegram reports the user blocked the bot; cleared on their
+    # next update. Lets monitoring count "users who left" without a new table.
+    bot_blocked_at: datetime | None = None

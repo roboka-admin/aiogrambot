@@ -1,3 +1,4 @@
+import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -53,6 +54,26 @@ class Database:
                 row_count = None
 
             return table_count or 0, row_count
+
+    async def ping(self) -> float:
+        """Round-trip a trivial query and return the latency in milliseconds."""
+        started = time.perf_counter()
+        async with self.engine.connect() as connection:
+            await connection.execute(text("SELECT 1"))
+        return round((time.perf_counter() - started) * 1000, 1)
+
+    async def get_db_size_bytes(self) -> int | None:
+        """Data + index bytes of the current schema as reported by MySQL."""
+        async with self.engine.connect() as connection:
+            result = await connection.execute(
+                text(
+                    "SELECT SUM(data_length + index_length) "
+                    "FROM information_schema.tables "
+                    "WHERE table_schema = DATABASE()"
+                )
+            )
+            size = result.scalar_one()
+        return int(size) if size is not None else None
 
     async def dispose(self) -> None:
         await self.engine.dispose()

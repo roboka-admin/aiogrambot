@@ -231,3 +231,33 @@ async def test_broadcast_rejects_invalid_progress_interval():
     )
     with pytest.raises(ValueError):
         await service.broadcast(from_chat_id=1, message_id=2, progress_interval=0)
+
+
+@pytest.mark.asyncio
+async def test_broadcast_marks_users_who_blocked_the_bot():
+    from services.telegram import TelegramAccessError
+
+    class TrackingUserRepository(FakeUserRepository):
+        def __init__(self, ids):
+            super().__init__(ids)
+            self.bot_blocked: dict[int, object] = {}
+
+        async def set_bot_blocked(self, telegram_id: int, blocked_at) -> None:
+            self.bot_blocked[telegram_id] = blocked_at
+
+    users = TrackingUserRepository([1, 2, 3])
+    gateway = FakeTelegramGateway(
+        failures={2: TelegramAccessError("bot was blocked by the user"), 3: RuntimeError("boom")}
+    )
+    service = BroadcastService(
+        user_repository=users,
+        broadcast_repository=FakeBroadcastRepository(),
+        telegram_gateway=gateway,
+    )
+
+    result = await service.broadcast(from_chat_id=10, message_id=20)
+
+    assert result.success == 1
+    assert result.failed == 2
+    assert list(users.bot_blocked) == [2]
+    assert users.bot_blocked[2] is not None
