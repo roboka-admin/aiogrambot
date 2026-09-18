@@ -19,9 +19,11 @@ from datetime import datetime, timedelta
 
 from core.log_buffer import ErrorLogBuffer
 from core.timezone import tehran_now
+from models.ai import AIReportKind
 from models.antispam import AntiSpamEventType
 from repositories.interfaces.antispam import IAntiSpamRepository
 from repositories.interfaces.user import IUserRepository
+from services.monitoring.analysis import AIAnalysis, AIAnalyzer
 from services.monitoring.rules import DEFAULT_THRESHOLDS, Anomaly, Severity, Thresholds, evaluate
 from services.monitoring.snapshot import (
     ActivityMetrics,
@@ -51,6 +53,7 @@ class MonitoringService:
         telegram_gateway: TelegramGateway,
         repository_factory: MonitoringRepositoryFactory,
         admin_ids_provider: AdminIdsProvider,
+        analyzer: AIAnalyzer | None = None,
         thresholds: Thresholds = DEFAULT_THRESHOLDS,
         alert_cooldown: timedelta = timedelta(hours=1),
     ) -> None:
@@ -59,6 +62,7 @@ class MonitoringService:
         self._telegram_gateway = telegram_gateway
         self._repository_factory = repository_factory
         self._admin_ids_provider = admin_ids_provider
+        self._analyzer = analyzer
         self._thresholds = thresholds
         self._alert_cooldown = alert_cooldown
 
@@ -91,7 +95,23 @@ class MonitoringService:
             await self._notify(snapshot, anomalies)
         except Exception:
             logger.exception("Monitoring alert delivery failed")
+
+        try:
+            await self._maybe_send_digest(snapshot, anomalies)
+        except Exception:
+            logger.exception("Monitoring digest failed")
         return snapshot, anomalies
+
+    async def analyse_now(self) -> tuple[MonitoringSnapshot, list[Anomaly], AIAnalysis | None]:
+        """Admin-triggered analysis of a fresh snapshot (no alert cooldown logic)."""
+        snapshot = await self.collect_snapshot()
+        anomalies = evaluate(snapshot, self._thresholds)
+        self._last_snapshot = snapshot
+        self._last_anomalies = tuple(anomalies)
+        analysis = None
+        if self._analyzer is not None:
+            analysis = await self._analyzer.analyse(snapshot, anomalies, kind=AIReportKind.MANUAL)
+        return snapshot, anomalies, analysis
 
     async def collect_snapshot(self) -> MonitoringSnapshot:
         now = tehran_now()
@@ -177,7 +197,22 @@ class MonitoringService:
         if not to_report and not resolved:
             return
 
-        text = _format_alert(snapshot, to_report, resolved)
+        analysis: AIAnalysis | None = None
+        if to_report and self._analyzer is not None and await self._analyzer.is_enabled():
+            analysis = await self._analyzer.analyse(snapshot, to_report, kind=AIReportKind.ANOMALY)
+
+        text = _format_alert(snapshot, to_report, resolved, analysis)
+        await self._send_to_admins(text)
+
+    async def _maybe_send_digest(self, snapshot: MonitoringSnapshot, anomalies: list[Anomaly]) -> None:
+        if self._analyzer is None or not await self._analyzer.digest_due(snapshot.taken_at):
+            return
+        analysis = await self._analyzer.analyse(snapshot, anomalies, kind=AIReportKind.DIGEST)
+        if analysis is None:
+            return
+        await self._send_to_admins(_format_digest(snapshot, analysis))
+
+    async def _send_to_admins(self, text: str) -> None:
         for admin_id in await self._admin_ids_provider():
             try:
                 await self._telegram_gateway.send_message(admin_id, text)
@@ -186,7 +221,10 @@ class MonitoringService:
 
 
 def _format_alert(
-    snapshot: MonitoringSnapshot, anomalies: list[Anomaly], resolved: list[str]
+    snapshot: MonitoringSnapshot,
+    anomalies: list[Anomaly],
+    resolved: list[str],
+    analysis: AIAnalysis | None = None,
 ) -> str:
     lines: list[str] = ["🩺 مانیتور سلامت ربات", ""]
 
@@ -208,6 +246,32 @@ def _format_alert(
             lines.append(f"• ×{issue.count} {issue.logger_name}: {issue.sample[:120]}")
         lines.append("")
 
+    if analysis is not None:
+        lines.extend(_format_analysis_lines(analysis))
+        lines.append("")
+
+    lines.extend(_format_footer(snapshot))
+    return "\n".join(lines)
+
+
+def _format_digest(snapshot: MonitoringSnapshot, analysis: AIAnalysis) -> str:
+    lines = ["📋 گزارش دوره‌ای سلامت ربات", ""]
+    lines.extend(_format_analysis_lines(analysis))
+    lines.append("")
+    lines.extend(_format_footer(snapshot))
+    return "\n".join(lines)
+
+
+def _format_analysis_lines(analysis: AIAnalysis) -> list[str]:
+    report = analysis.report
+    lines = [f"🤖 تحلیل هوشمند ({report.provider_key}):", report.summary]
+    if analysis.switched_from:
+        lines.append(f"↪️ مدل {analysis.switched_from} در دسترس نبود؛ به {report.provider_key} سوئیچ شد.")
+    lines.append(f"🔢 توکن: {report.tokens_in + report.tokens_out:,}")
+    return lines
+
+
+def _format_footer(snapshot: MonitoringSnapshot) -> list[str]:
     resources = snapshot.resources
     database = snapshot.database
     memory = (
@@ -215,8 +279,7 @@ def _format_alert(
     )
     disk = f"{resources.disk_percent:.0f}%" if resources.disk_percent is not None else "—"
     latency = f"{database.latency_ms:.0f}ms" if database.latency_ms is not None else "—"
-    lines.append(f"📊 RAM {memory} | Disk {disk} | DB {latency}")
-    lines.append(
-        f"🕐 {snapshot.taken_at.strftime('%H:%M')} | بازه {snapshot.window_seconds // 60} دقیقه"
-    )
-    return "\n".join(lines)
+    return [
+        f"📊 RAM {memory} | Disk {disk} | DB {latency}",
+        f"🕐 {snapshot.taken_at.strftime('%H:%M')} | بازه {snapshot.window_seconds // 60} دقیقه",
+    ]

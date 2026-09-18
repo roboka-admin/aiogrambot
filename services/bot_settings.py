@@ -92,6 +92,29 @@ class BotSettingsService:
         settings.updated_at = tehran_now()
         return await self._bot_settings_repository.update(settings)
 
+    @transactional
+    async def set_ai_monitoring_enabled(self, enabled: bool) -> BotSettings:
+        settings = await self._get_settings()
+        settings.ai_monitoring_enabled = enabled
+        settings.updated_at = tehran_now()
+        return await self._bot_settings_repository.update(settings)
+
+    @transactional
+    async def toggle_ai_monitoring(self) -> BotSettings:
+        settings = await self._get_settings()
+        settings.ai_monitoring_enabled = not settings.ai_monitoring_enabled
+        settings.updated_at = tehran_now()
+        return await self._bot_settings_repository.update(settings)
+
+    @transactional
+    async def set_ai_digest_interval_hours(self, hours: int) -> BotSettings:
+        if hours < 1 or hours > 168:
+            raise ValueError("digest interval must be between 1 and 168 hours")
+        settings = await self._get_settings()
+        settings.ai_digest_interval_hours = hours
+        settings.updated_at = tehran_now()
+        return await self._bot_settings_repository.update(settings)
+
     async def _get_settings(self) -> BotSettings:
         settings = await self._bot_settings_repository.get()
         if settings is not None:

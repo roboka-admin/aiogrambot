@@ -225,3 +225,89 @@ async def test_repository_failure_still_produces_snapshot() -> None:
     assert snapshot.activity.spam_blocks == 0
     assert [a.key for a in anomalies] == ["db_down"]
     assert "پایگاه داده" in gateway.messages[0][1]
+
+
+class FakeAnalyzer:
+    def __init__(self, *, enabled: bool = True, digest: bool = False, text: str = "تشخیص: تست") -> None:
+        self.enabled = enabled
+        self.digest = digest
+        self.text = text
+        self.calls: list[tuple[str, list[str]]] = []
+
+    async def is_enabled(self) -> bool:
+        return self.enabled
+
+    async def digest_due(self, now) -> bool:
+        return self.digest
+
+    async def analyse(self, snapshot, anomalies, *, kind):
+        from models.ai import AIReport
+        from services.monitoring.analysis import AIAnalysis
+
+        self.calls.append((kind.value, [a.key for a in anomalies]))
+        report = AIReport(
+            id=1, kind=kind, provider_key="gemini", severity="warning", summary=self.text,
+            anomaly_keys=",".join(a.key for a in anomalies), tokens_in=100, tokens_out=30,
+        )
+        return AIAnalysis(report=report, switched_from="mistral" if kind.value == "anomaly" else None)
+
+
+def build_with_analyzer(analyzer: FakeAnalyzer, **kwargs):
+    service, system, gateway, users, antispam = build(**kwargs)
+    service._analyzer = analyzer  # injected the same way main.py does via constructor
+    return service, system, gateway
+
+
+@pytest.mark.asyncio
+async def test_ai_diagnosis_is_appended_only_for_newly_reported_anomalies() -> None:
+    analyzer = FakeAnalyzer()
+    service, system, gateway = build_with_analyzer(analyzer)
+    system.memory_percent = 95.0
+
+    await service.run_cycle()
+    await service.run_cycle()  # still failing, inside cooldown → no new alert, no AI call
+
+    assert analyzer.calls == [("anomaly", ["memory"])]
+    text = gateway.messages[0][1]
+    assert "🤖 تحلیل هوشمند (gemini):" in text
+    assert "تشخیص: تست" in text
+    assert "↪️ مدل mistral در دسترس نبود؛ به gemini سوئیچ شد." in text
+    assert "🔢 توکن: 130" in text
+
+
+@pytest.mark.asyncio
+async def test_ai_is_skipped_when_disabled_but_alert_still_sent() -> None:
+    analyzer = FakeAnalyzer(enabled=False)
+    service, system, gateway = build_with_analyzer(analyzer)
+    system.memory_percent = 95.0
+
+    await service.run_cycle()
+
+    assert analyzer.calls == []
+    assert len(gateway.messages) == 2
+    assert "تحلیل هوشمند" not in gateway.messages[0][1]
+
+
+@pytest.mark.asyncio
+async def test_digest_is_sent_when_due_even_without_anomalies() -> None:
+    analyzer = FakeAnalyzer(digest=True, text="تشخیص: همه‌چیز سالم است")
+    service, _, gateway = build_with_analyzer(analyzer)
+
+    await service.run_cycle()
+
+    assert analyzer.calls == [("digest", [])]
+    assert gateway.messages[0][1].startswith("📋 گزارش دوره‌ای سلامت ربات")
+    assert "همه‌چیز سالم است" in gateway.messages[0][1]
+
+
+@pytest.mark.asyncio
+async def test_analyse_now_returns_manual_report_without_sending() -> None:
+    analyzer = FakeAnalyzer()
+    service, system, gateway = build_with_analyzer(analyzer)
+    system.memory_percent = 95.0
+
+    snapshot, anomalies, analysis = await service.analyse_now()
+
+    assert [a.key for a in anomalies] == ["memory"]
+    assert analysis is not None and analysis.report.kind.value == "manual"
+    assert gateway.messages == []

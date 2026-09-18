@@ -12,6 +12,7 @@ from models.admin_db import (
     AdminRecord,
 )
 from models.antispam_db import AntiSpamEventRecord
+from models.ai_db import AIProviderRecord, AIReportRecord
 from models.base import Base
 from models.bot_settings_db import BotSettingsRecord
 from models.broadcast_db import BroadcastRecordRecord
@@ -33,6 +34,8 @@ _ = (
     AdminRecord,
     AdminPermissionRecord,
     AdminPermissionAssignmentRecord,
+    AIProviderRecord,
+    AIReportRecord,
 )
 
 
@@ -114,6 +117,7 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
         )
         assert "0009_add_referral_reward -> 0010_add_referral_rewards" in output
         assert "0010_add_referral_rewards -> 0011_add_user_bot_blocked_at" in output
+        assert "0011_add_user_bot_blocked_at -> 0012_add_ai_monitoring" in output
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
             tables = set((await session.execute(text("SHOW TABLES"))).scalars())
@@ -156,6 +160,8 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
             "admin_permissions",
             "admin_permission_assignments",
             "referral_rewards",
+            "ai_providers",
+            "ai_reports",
             "alembic_version",
         }.issubset(tables)
         assert {
@@ -165,7 +171,7 @@ async def test_initial_migration_builds_test_database_from_empty_schema() -> Non
             "referral_pending_code",
             "bot_blocked_at",
         }.issubset(user_columns)
-        assert revision == "0011_add_user_bot_blocked_at"
+        assert revision == "0012_add_ai_monitoring"
         assert settings_count == 1
         assert antispam_enabled == 1
         assert force_subscription_enabled == 0
@@ -226,6 +232,6 @@ async def test_referral_migration_widens_legacy_int_telegram_id() -> None:
 
         assert telegram_id_type.lower() == "bigint"
         assert "fk_users_referred_by_user_id" in foreign_keys
-        assert revision == "0011_add_user_bot_blocked_at"
+        assert revision == "0012_add_ai_monitoring"
     finally:
         await engine.dispose()

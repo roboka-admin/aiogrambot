@@ -8,6 +8,7 @@ from sqlalchemy import engine_from_config, pool
 
 from core.database_url import build_connection_config
 from models.base import Base
+from models.ai_db import AIProviderRecord, AIReportRecord
 from models.antispam_db import AntiSpamEventRecord
 from models.bot_settings_db import BotSettingsRecord
 from models.broadcast_db import BroadcastRecordRecord

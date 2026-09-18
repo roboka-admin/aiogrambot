@@ -28,6 +28,8 @@ class BotSettingsRepository(IBotSettingsRepository):
             maintenance_message=settings.maintenance_message,
             referral_reward_coins=settings.referral_reward_coins,
             referral_reward_per_invites=settings.referral_reward_per_invites,
+            ai_monitoring_enabled=settings.ai_monitoring_enabled,
+            ai_digest_interval_hours=settings.ai_digest_interval_hours,
             updated_at=settings.updated_at,
         )
         self._session.add(record)
@@ -50,6 +52,8 @@ class BotSettingsRepository(IBotSettingsRepository):
         record.maintenance_message = settings.maintenance_message
         record.referral_reward_coins = settings.referral_reward_coins
         record.referral_reward_per_invites = settings.referral_reward_per_invites
+        record.ai_monitoring_enabled = settings.ai_monitoring_enabled
+        record.ai_digest_interval_hours = settings.ai_digest_interval_hours
         record.updated_at = settings.updated_at
         await self._session.flush()
         return self._to_domain(record)
@@ -66,5 +70,7 @@ class BotSettingsRepository(IBotSettingsRepository):
             maintenance_message=record.maintenance_message,
             referral_reward_coins=record.referral_reward_coins,
             referral_reward_per_invites=record.referral_reward_per_invites,
+            ai_monitoring_enabled=record.ai_monitoring_enabled,
+            ai_digest_interval_hours=record.ai_digest_interval_hours,
             updated_at=record.updated_at,
         )

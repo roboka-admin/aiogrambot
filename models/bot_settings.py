@@ -9,6 +9,10 @@ DEFAULT_MAINTENANCE_MESSAGE = "🛠 ربات در حال بروزرسانی و �
 # *registered* referrals reaches a multiple of ``per_invites``.
 DEFAULT_REFERRAL_REWARD_COINS = 1
 DEFAULT_REFERRAL_REWARD_PER_INVITES = 1
+# AI analysis on top of rule-based monitoring: enabled by default, one
+# scheduled digest per day (hours between digests).
+DEFAULT_AI_MONITORING_ENABLED = True
+DEFAULT_AI_DIGEST_INTERVAL_HOURS = 24
 
 
 @dataclass
@@ -22,4 +26,6 @@ class BotSettings:
     maintenance_message: str = DEFAULT_MAINTENANCE_MESSAGE
     referral_reward_coins: int = DEFAULT_REFERRAL_REWARD_COINS
     referral_reward_per_invites: int = DEFAULT_REFERRAL_REWARD_PER_INVITES
+    ai_monitoring_enabled: bool = DEFAULT_AI_MONITORING_ENABLED
+    ai_digest_interval_hours: int = DEFAULT_AI_DIGEST_INTERVAL_HOURS
     updated_at: datetime = field(default_factory=tehran_now)

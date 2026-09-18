@@ -6,6 +6,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from core.timezone import tehran_now
 from models.base import Base
 from models.bot_settings import (
+    DEFAULT_AI_DIGEST_INTERVAL_HOURS,
+    DEFAULT_AI_MONITORING_ENABLED,
     DEFAULT_MAINTENANCE_MESSAGE,
     DEFAULT_OFFLINE_MESSAGE,
     DEFAULT_REFERRAL_REWARD_COINS,
@@ -25,4 +27,6 @@ class BotSettingsRecord(Base):
     maintenance_message: Mapped[str] = mapped_column(String(1000), default=DEFAULT_MAINTENANCE_MESSAGE)
     referral_reward_coins: Mapped[int] = mapped_column(Integer, default=DEFAULT_REFERRAL_REWARD_COINS)
     referral_reward_per_invites: Mapped[int] = mapped_column(Integer, default=DEFAULT_REFERRAL_REWARD_PER_INVITES)
+    ai_monitoring_enabled: Mapped[bool] = mapped_column(Boolean, default=DEFAULT_AI_MONITORING_ENABLED)
+    ai_digest_interval_hours: Mapped[int] = mapped_column(Integer, default=DEFAULT_AI_DIGEST_INTERVAL_HOURS)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=tehran_now, onupdate=tehran_now)

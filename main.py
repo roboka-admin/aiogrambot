@@ -47,10 +47,14 @@ from middlewares.services import ServicesMiddleware
 from middlewares.user import UserMiddleware
 from models.admin import AdminStatus
 from repositories.admin import AdminRepository
+from repositories.ai import AIProviderRepository, AIReportRepository
 from repositories.antispam import AntiSpamRepository
+from repositories.bot_settings import BotSettingsRepository
 from repositories.user import UserRepository
 from services.admin import AdminService
+from services.ai import AIRouter
 from services.monitoring import MonitoringService
+from services.monitoring.analysis import AIAnalyzer
 from services.system import SystemService
 
 
@@ -86,6 +90,19 @@ def build_monitoring_service(
         async with database.get_session() as session:
             yield UserRepository(session), AntiSpamRepository(session)
 
+    # AI bookkeeping (usage counters, reports) writes, so these scopes commit.
+    @asynccontextmanager
+    async def provider_scope():
+        async with database.get_session() as session:
+            async with session.begin():
+                yield AIProviderRepository(session)
+
+    @asynccontextmanager
+    async def analysis_scope():
+        async with database.get_session() as session:
+            async with session.begin():
+                yield AIReportRepository(session), BotSettingsRepository(session)
+
     async def active_admin_ids() -> tuple[int, ...]:
         async with database.get_session() as session:
             admin_repository = AdminRepository(session)
@@ -94,12 +111,17 @@ def build_monitoring_service(
             admin.telegram_id for admin in admins if admin.status is AdminStatus.ACTIVE
         )
 
+    analyzer = AIAnalyzer(
+        router=AIRouter(repository_factory=provider_scope),
+        repository_factory=analysis_scope,
+    )
     return MonitoringService(
         system_service=system_service,
         log_buffer=log_buffer,
         telegram_gateway=AiogramTelegramGateway(bot),
         repository_factory=repository_scope,
         admin_ids_provider=active_admin_ids,
+        analyzer=analyzer,
     )
 
 
