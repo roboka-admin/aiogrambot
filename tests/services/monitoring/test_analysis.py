@@ -120,3 +120,15 @@ async def test_digest_due_respects_interval_and_toggle():
 
     analyzer, _, _ = make_analyzer([], settings=BotSettings(ai_monitoring_enabled=False))
     assert await analyzer.digest_due(now) is False
+
+
+@pytest.mark.asyncio
+async def test_digest_due_handles_naive_created_at_from_database():
+    analyzer, _, reports = make_analyzer([], settings=BotSettings(ai_digest_interval_hours=24))
+    now = tehran_now()
+    reports.reports.append(AIReport(
+        id=1, kind=AIReportKind.DIGEST, provider_key="gemini", severity="info", summary="ok",
+        anomaly_keys="", tokens_in=1, tokens_out=1,
+        created_at=(now - timedelta(hours=1)).replace(tzinfo=None),
+    ))
+    assert await analyzer.digest_due(now) is False

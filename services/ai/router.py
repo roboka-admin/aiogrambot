@@ -17,7 +17,7 @@ from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from core.timezone import tehran_now
+from core.timezone import ensure_tehran, tehran_now
 from models.ai import AIProviderConfig, AIProviderStatus
 from repositories.interfaces.ai import IAIProviderRepository
 from services.ai.provider import (
@@ -109,7 +109,7 @@ class AIRouter:
         if config.status is AIProviderStatus.FAILED:
             return False
         if config.status is AIProviderStatus.COOLDOWN:
-            if config.cooldown_until is not None and config.cooldown_until > now:
+            if config.cooldown_until is not None and ensure_tehran(config.cooldown_until) > now:
                 return False
         if config.daily_token_budget is not None and config.tokens_today_date == _day(now):
             if config.tokens_today >= config.daily_token_budget:

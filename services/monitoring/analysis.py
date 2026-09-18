@@ -15,7 +15,7 @@ from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from core.timezone import tehran_now
+from core.timezone import ensure_tehran, tehran_now
 from models.ai import AIReport, AIReportKind
 from repositories.interfaces.ai import IAIReportRepository
 from repositories.interfaces.bot_settings import IBotSettingsRepository
@@ -84,7 +84,7 @@ class AIAnalyzer:
             latest = await reports.get_latest(AIReportKind.DIGEST.value)
         if latest is None:
             return True
-        return now - latest.created_at >= timedelta(hours=interval_hours)
+        return now - ensure_tehran(latest.created_at) >= timedelta(hours=interval_hours)
 
     async def analyse(
         self,

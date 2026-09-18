@@ -159,3 +159,20 @@ async def test_raises_when_no_candidates():
     repo = FakeProviderRepository([config("gemini", 10, enabled=False)])
     with pytest.raises(NoProviderAvailable):
         await make_router(repo, {}).complete(REQ)
+
+
+@pytest.mark.asyncio
+async def test_naive_cooldown_from_database_does_not_crash():
+    """MySQL returns naive DATETIMEs; the router must still compare them."""
+    naive_future = (tehran_now() + timedelta(hours=1)).replace(tzinfo=None)
+    repo = FakeProviderRepository([
+        config("gemini", 10, status=AIProviderStatus.COOLDOWN, cooldown_until=naive_future),
+        config("mistral", 20),
+    ])
+    gemini = ScriptedProvider("gemini", [OK])
+    mistral = ScriptedProvider("mistral", [OK])
+
+    result = await make_router(repo, {"gemini": gemini, "mistral": mistral}).complete(REQ)
+
+    assert result.provider_key == "mistral"
+    assert gemini.requests == []
