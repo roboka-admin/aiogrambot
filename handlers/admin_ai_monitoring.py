@@ -19,7 +19,12 @@ from keyboards.admin_ai_monitoring import (
 )
 from models.ai import AIReport
 from models.bot_settings import BotSettings
-from services.ai_monitoring import AIMonitoringService, ProviderView, TokenUsage
+from services.ai_monitoring import (
+    AIMonitoringService,
+    ConnectionTestResult,
+    ProviderView,
+    TokenUsage,
+)
 from services.bot_settings import BotSettingsService
 from services.monitoring import MonitoringService
 from services.monitoring.rules import Anomaly
@@ -32,7 +37,7 @@ router.callback_query.filter(AdminPermissionFilter("ai_monitoring"))
 _STATUS_LABEL = {
     "ready": "🟢 آماده",
     "cooldown": "🟠 در انتظار (محدودیت)",
-    "failed": "🔴 خطا در احراز هویت",
+    "failed": "🔴 خطا (نیاز به بررسی)",
     "no_key": "🔑 کلید API تنظیم نشده",
     "disabled": "⚪ غیرفعال",
 }
@@ -223,16 +228,7 @@ async def ai_provider_test_handler(
 ) -> None:
     await callback.answer("در حال تست اتصال…")
     result = await ai_monitoring_service.test_provider(callback_data.key)
-    await _show_provider(
-        callback,
-        callback_data.key,
-        ai_monitoring_service,
-        banner=(
-            f"✅ تست موفق — پاسخ: «{result.detail}» ({result.tokens} توکن)"
-            if result.ok
-            else f"❌ تست ناموفق — {result.detail}"
-        ),
-    )
+    await _show_provider(callback, callback_data.key, ai_monitoring_service, banner=_test_banner(result))
 
 
 @router.callback_query(AdminAIProviderCallback.filter(F.action == "model"))
@@ -254,7 +250,7 @@ async def ai_provider_model_prompt_handler(
             f"✏️ تغییر مدل {view.config.display_name}\n\n"
             f"مدل فعلی: <code>{view.config.model}</code>\n\n"
             "نام دقیق مدل جدید را بفرستید (مثل <code>gemini-3.5-flash-lite</code> یا "
-            "<code>mistral-small-latest</code>). بعد از ذخیره، «تست اتصال» را بزنید."
+            "<code>mistral-small-latest</code>). بلافاصله بعد از ذخیره، اتصال تست می‌شود."
         ),
         reply_markup=ai_provider_model_prompt_keyboard(callback_data.key),
         parse_mode="HTML",
@@ -275,7 +271,7 @@ async def ai_provider_model_input_handler(
         await message.answer("❌ زمینه‌ی ویرایش از دست رفت؛ دوباره از پنل شروع کنید.")
         return
     try:
-        view = await ai_monitoring_service.set_model(key, message.text or "")
+        view, result = await ai_monitoring_service.set_model(key, message.text or "")
     except ValueError:
         await message.answer(
             "❌ نام مدل معتبر نیست. یک شناسه‌ی بدون فاصله بفرستید.",
@@ -286,7 +282,7 @@ async def ai_provider_model_input_handler(
     providers = await ai_monitoring_service.list_providers()
     is_primary = bool(providers) and providers[0].config.key == key
     await message.answer(
-        "✅ مدل ذخیره شد.\n\n" + _provider_text(view),
+        _provider_text(view, "✅ مدل ذخیره شد. " + _test_banner(result)),
         reply_markup=ai_provider_detail_keyboard(view, is_primary=is_primary),
     )
 
@@ -421,6 +417,12 @@ async def _show_provider(
         text=_provider_text(view, banner),
         reply_markup=ai_provider_detail_keyboard(view, is_primary=is_primary),
     )
+
+
+def _test_banner(result: ConnectionTestResult) -> str:
+    if result.ok:
+        return f"✅ تست موفق — پاسخ: «{result.detail}» ({result.tokens} توکن)"
+    return f"❌ تست ناموفق — {result.detail}"
 
 
 def _report_text(report: AIReport) -> str:

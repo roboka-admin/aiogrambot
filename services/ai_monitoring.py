@@ -17,12 +17,19 @@ from core.timezone import tehran_now
 from core.transaction import NullTransactionManager, TransactionManager, transactional
 from models.ai import AIProviderConfig, AIProviderStatus, AIReport
 from repositories.interfaces.ai import IAIProviderRepository, IAIReportRepository
-from services.ai.provider import AIProvider, AIProviderError, AIRequest
+from services.ai.provider import (
+    AIAuthError,
+    AIProvider,
+    AIProviderError,
+    AIQuotaError,
+    AIRequest,
+)
 from services.ai.registry import SecretResolver, build_provider, resolve_secret_from_env
 
 ProviderBuilder = Callable[[AIProviderConfig], AIProvider | None]
 
 REPORTS_PAGE_SIZE = 5
+TEST_QUOTA_COOLDOWN = timedelta(hours=1)
 
 _TEST_REQUEST = AIRequest(
     system="Reply with exactly one word: OK",
@@ -135,22 +142,34 @@ class AIMonitoringService:
         config.updated_at = tehran_now()
         return self._view(await self._providers.upsert(config))
 
-    @transactional
-    async def set_model(self, key: str, model: str) -> ProviderView:
+    async def set_model(self, key: str, model: str) -> tuple[ProviderView, ConnectionTestResult]:
+        """Save a new model name and immediately verify it.
+
+        The stored status is whatever the verification produced, so the panel
+        never shows a freshly typed (possibly wrong) model as "ready".
+        """
         model = model.strip()
         if not model or len(model) > 100 or any(ch.isspace() for ch in model):
             raise ValueError("model name must be a single token up to 100 characters")
-        config = await self._require(key)
-        config.model = model
-        # A new model deserves a fresh start; old 404s are no longer relevant.
-        config.status = AIProviderStatus.READY
-        config.cooldown_until = None
-        config.last_error = None
-        config.updated_at = tehran_now()
-        return self._view(await self._providers.upsert(config))
+        async with self._transaction_manager.transaction():
+            config = await self._require(key)
+            config.model = model
+            config.updated_at = tehran_now()
+            await self._providers.upsert(config)
+        result = await self.test_provider(key)
+        view = await self.get_provider(key)
+        assert view is not None  # just upserted above
+        return view, result
 
     async def test_provider(self, key: str) -> ConnectionTestResult:
-        """One tiny real request; records the outcome like the router would."""
+        """One tiny real request; the stored status follows the outcome.
+
+        Mapping mirrors the router (quota -> COOLDOWN, auth -> FAILED) with one
+        deliberate difference: a generic error (404 unknown model, 5xx, network)
+        also marks FAILED. The router treats those as transient and fails over,
+        but an admin-run test is a verification step: an error must be visible
+        as the provider's status until the admin fixes it and re-tests/resets.
+        """
         async with self._transaction_manager.transaction():
             config = await self._require(key)
         provider = self._build(config)
@@ -158,13 +177,20 @@ class AIMonitoringService:
             return ConnectionTestResult(
                 ok=False, provider_key=key, detail=f"متغیر محیطی {config.api_key_env} تنظیم نشده است."
             )
+        now = tehran_now()
         try:
             response = await provider.complete(_TEST_REQUEST)
         except AIProviderError as exc:
             async with self._transaction_manager.transaction():
                 config = await self._require(key)
+                if isinstance(exc, AIQuotaError):
+                    config.status = AIProviderStatus.COOLDOWN
+                    config.cooldown_until = now + TEST_QUOTA_COOLDOWN
+                else:
+                    config.status = AIProviderStatus.FAILED
+                    config.cooldown_until = None
                 config.last_error = str(exc)[:500]
-                config.updated_at = tehran_now()
+                config.updated_at = now
                 await self._providers.upsert(config)
             return ConnectionTestResult(ok=False, provider_key=key, detail=str(exc)[:300])
 
@@ -173,10 +199,10 @@ class AIMonitoringService:
             config.status = AIProviderStatus.READY
             config.cooldown_until = None
             config.last_error = None
-            config.last_used_at = tehran_now()
+            config.last_used_at = now
             config.tokens_in_total += response.tokens_in
             config.tokens_out_total += response.tokens_out
-            config.updated_at = tehran_now()
+            config.updated_at = now
             await self._providers.upsert(config)
         return ConnectionTestResult(
             ok=True,

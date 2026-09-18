@@ -4,7 +4,7 @@ import pytest
 
 from core.timezone import tehran_now
 from models.ai import AIProviderStatus, AIReport, AIReportKind
-from services.ai.provider import AIAuthError, AIResponse
+from services.ai.provider import AIAuthError, AIProviderError, AIQuotaError, AIResponse
 from services.ai_monitoring import REPORTS_PAGE_SIZE, AIMonitoringService
 from tests.services.ai.fakes import (
     FakeProviderRepository,
@@ -115,20 +115,44 @@ async def test_unknown_provider_raises_key_error():
         await service.make_primary("nope")
 
 
-async def test_set_model_validates_and_clears_previous_failure():
+async def test_set_model_validates_input_without_touching_provider():
+    provider = ScriptedProvider("gemini", [])
     service, repo, _ = make_service(
-        [config("gemini", 10, api_key_env="G", status=AIProviderStatus.FAILED, last_error="404")],
-        secrets={"G": "k"},
+        [config("gemini", 10, api_key_env="G", model="old")], secrets={"G": "k"}, provider=provider
     )
     with pytest.raises(ValueError):
         await service.set_model("gemini", "")
     with pytest.raises(ValueError):
         await service.set_model("gemini", "two words")
+    assert repo.configs["gemini"].model == "old"
+    assert provider.requests == []
 
-    view = await service.set_model("gemini", "  gemini-3.5-flash-lite ")
+
+async def test_set_model_saves_then_verifies_success():
+    provider = ScriptedProvider("gemini", [AIResponse(text="OK", tokens_in=7, tokens_out=1)])
+    service, repo, _ = make_service(
+        [config("gemini", 10, api_key_env="G", status=AIProviderStatus.FAILED, last_error="404")],
+        secrets={"G": "k"},
+        provider=provider,
+    )
+    view, result = await service.set_model("gemini", "  gemini-3.5-flash-lite ")
+    assert result.ok is True
     assert view.config.model == "gemini-3.5-flash-lite"
-    assert repo.configs["gemini"].status is AIProviderStatus.READY
+    assert view.effective_status == "ready"
     assert repo.configs["gemini"].last_error is None
+    assert len(provider.requests) == 1
+
+
+async def test_set_model_with_unknown_model_is_saved_but_marked_failed():
+    provider = ScriptedProvider("gemini", [AIProviderError("HTTP 404: model not found")])
+    service, repo, _ = make_service(
+        [config("gemini", 10, api_key_env="G")], secrets={"G": "k"}, provider=provider
+    )
+    view, result = await service.set_model("gemini", "gemini-9-does-not-exist")
+    assert result.ok is False
+    assert repo.configs["gemini"].model == "gemini-9-does-not-exist"  # saved so admin can see/fix
+    assert view.effective_status == "failed"
+    assert "404" in (repo.configs["gemini"].last_error or "")
 
 
 async def test_test_provider_success_marks_ready_and_counts_tokens():
@@ -150,7 +174,7 @@ async def test_test_provider_success_marks_ready_and_counts_tokens():
     assert provider.requests[0].max_tokens <= 10
 
 
-async def test_test_provider_failure_records_error_without_changing_status():
+async def test_test_provider_auth_error_marks_failed():
     provider = ScriptedProvider("gemini", [AIAuthError("gemini: 401 invalid key")])
     service, repo, _ = make_service(
         [config("gemini", 10, api_key_env="G")], secrets={"G": "k"}, provider=provider
@@ -159,7 +183,31 @@ async def test_test_provider_failure_records_error_without_changing_status():
     assert result.ok is False
     assert "401" in result.detail
     assert repo.configs["gemini"].last_error == "gemini: 401 invalid key"
-    assert repo.configs["gemini"].status is AIProviderStatus.READY
+    assert repo.configs["gemini"].status is AIProviderStatus.FAILED
+
+
+async def test_test_provider_generic_error_marks_failed_too():
+    provider = ScriptedProvider("gemini", [AIProviderError("HTTP 404: model not found")])
+    service, repo, _ = make_service(
+        [config("gemini", 10, api_key_env="G")], secrets={"G": "k"}, provider=provider
+    )
+    result = await service.test_provider("gemini")
+    assert result.ok is False
+    assert repo.configs["gemini"].status is AIProviderStatus.FAILED
+    assert repo.configs["gemini"].cooldown_until is None
+
+
+async def test_test_provider_quota_error_marks_cooldown():
+    provider = ScriptedProvider("gemini", [AIQuotaError("429 quota")])
+    service, repo, _ = make_service(
+        [config("gemini", 10, api_key_env="G")], secrets={"G": "k"}, provider=provider
+    )
+    before = tehran_now()
+    result = await service.test_provider("gemini")
+    assert result.ok is False
+    stored = repo.configs["gemini"]
+    assert stored.status is AIProviderStatus.COOLDOWN
+    assert stored.cooldown_until is not None and stored.cooldown_until > before
 
 
 async def test_test_provider_without_api_key_explains_missing_env():

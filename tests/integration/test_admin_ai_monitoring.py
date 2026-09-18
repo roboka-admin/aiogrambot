@@ -244,14 +244,23 @@ async def test_model_input_handler_rejects_invalid_then_saves() -> None:
     assert "معتبر نیست" in message.answer.await_args.args[0]
     state.clear.assert_not_awaited()
 
-    ai_service.set_model = AsyncMock(return_value=view(model="gemini-3.5-flash-lite"))
-    ai_service.list_providers = AsyncMock(return_value=[view(model="gemini-3.5-flash-lite")])
-    message.text = "gemini-3.5-flash-lite"
+    failed = view(model="gemini-9", status=AIProviderStatus.FAILED, last_error="HTTP 404")
+    ai_service.set_model = AsyncMock(
+        return_value=(
+            failed,
+            ConnectionTestResult(ok=False, provider_key="gemini", detail="HTTP 404: not found"),
+        )
+    )
+    ai_service.list_providers = AsyncMock(return_value=[failed])
+    message.text = "gemini-9"
     await ai_provider_model_input_handler(message, state, ai_service)
 
-    ai_service.set_model.assert_awaited_once_with("gemini", "gemini-3.5-flash-lite")
+    ai_service.set_model.assert_awaited_once_with("gemini", "gemini-9")
     state.clear.assert_awaited_once()
-    assert message.answer.await_args.args[0].startswith("✅ مدل ذخیره شد.")
+    text = message.answer.await_args.args[0]
+    assert text.startswith("✅ مدل ذخیره شد. ❌ تست ناموفق — HTTP 404: not found")
+    assert "وضعیت: 🔴 خطا (نیاز به بررسی)" in text
+    assert "مدل: gemini-9" in text
 
 
 async def test_reports_handler_lists_reports_and_empty_state() -> None:
