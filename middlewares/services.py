@@ -9,6 +9,7 @@ from core.database import Database
 from core.telegram import AiogramTelegramGateway
 from core.transaction import SessionTransactionManager
 from repositories.admin import AdminRepository
+from repositories.ai import AIProviderRepository, AIReportRepository
 from repositories.antispam import AntiSpamRepository
 from repositories.bot_settings import BotSettingsRepository
 from repositories.broadcast import BroadcastRepository
@@ -19,10 +20,12 @@ from repositories.referral_reward import ReferralRewardRepository
 from repositories.support import SupportRepository
 from repositories.user import UserRepository
 from services.admin import AdminService
+from services.ai_monitoring import AIMonitoringService
 from services.antispam import AntiSpamService
 from services.bot_settings import BotSettingsService
 from services.broadcast import BroadcastService
 from services.force_subscription import ForceSubscriptionService
+from services.monitoring import MonitoringService
 from services.notification import NotificationService
 from services.referral import ReferralService
 from services.register import RegisterService
@@ -34,9 +37,18 @@ from services.user import UserService
 class ServicesMiddleware(BaseMiddleware):
     """Create request-scoped repository and service dependencies."""
 
-    def __init__(self, *, database: Database, system_service: SystemService) -> None:
+    def __init__(
+        self,
+        *,
+        database: Database,
+        system_service: SystemService,
+        monitoring_service: MonitoringService | None = None,
+    ) -> None:
         self._database = database
         self._system_service = system_service
+        # Process-wide singleton (owns the background loop); passed through
+        # so the admin panel can trigger an on-demand analysis.
+        self._monitoring_service = monitoring_service
         self._broadcast_lock = asyncio.Lock()
 
     async def __call__(
@@ -56,6 +68,8 @@ class ServicesMiddleware(BaseMiddleware):
             admin_repository = AdminRepository(session)
             referral_repository = ReferralRepository(session)
             referral_reward_repository = ReferralRewardRepository(session)
+            ai_provider_repository = AIProviderRepository(session)
+            ai_report_repository = AIReportRepository(session)
             telegram_gateway = AiogramTelegramGateway(data["bot"])
 
             @asynccontextmanager
@@ -115,6 +129,12 @@ class ServicesMiddleware(BaseMiddleware):
                 transaction_manager=transaction_manager,
             )
 
+            ai_monitoring_service = AIMonitoringService(
+                provider_repository=ai_provider_repository,
+                report_repository=ai_report_repository,
+                transaction_manager=transaction_manager,
+            )
+
             data["register_service"] = register_service
             data["user_service"] = user_service
             data["support_service"] = support_service
@@ -126,5 +146,7 @@ class ServicesMiddleware(BaseMiddleware):
             data["admin_service"] = admin_service
             data["referral_service"] = referral_service
             data["system_service"] = self._system_service
+            data["ai_monitoring_service"] = ai_monitoring_service
+            data["monitoring_service"] = self._monitoring_service
 
             return await handler(event, data)

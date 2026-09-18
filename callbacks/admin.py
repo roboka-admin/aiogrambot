@@ -96,3 +96,26 @@ class AdminReferralRewardCallback(CallbackData, prefix="admin_referral_reward"):
     action: str
     delta: int = 0
     value: int = 0
+
+
+class AdminAIMonitoringCallback(CallbackData, prefix="admin_ai"):
+    """Navigation on the AI monitoring panel.
+
+    action: "home" | "toggle" | "providers" | "reports" | "analyse"
+            | "digest_interval"
+    page: reports page; value: hours for "digest_interval".
+    """
+
+    action: str
+    page: int = 0
+    value: int = 0
+
+
+class AdminAIProviderCallback(CallbackData, prefix="admin_ai_provider"):
+    """Actions on one provider.
+
+    action: "open" | "toggle" | "primary" | "reset" | "test" | "model"
+    """
+
+    action: str
+    key: str

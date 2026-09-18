@@ -28,6 +28,8 @@ def _enter_service_patches(stack: ExitStack) -> dict[str, MagicMock]:
         "AdminRepository",
         "ReferralRepository",
         "ReferralRewardRepository",
+        "AIProviderRepository",
+        "AIReportRepository",
         "AiogramTelegramGateway",
         "RegisterService",
         "UserService",
@@ -39,6 +41,7 @@ def _enter_service_patches(stack: ExitStack) -> dict[str, MagicMock]:
         "NotificationService",
         "AdminService",
         "ReferralService",
+        "AIMonitoringService",
     )
     return {
         name: stack.enter_context(patch(f"middlewares.services.{name}"))
@@ -51,13 +54,18 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     session = MagicMock()
     database = FakeDatabase(session)
     system_service = MagicMock()
+    monitoring_service = MagicMock()
     bot = Bot("42:TEST")
     handler = AsyncMock(return_value="handled")
     data = {"bot": bot}
 
     with ExitStack() as stack:
         mocks = _enter_service_patches(stack)
-        middleware = ServicesMiddleware(database=database, system_service=system_service)
+        middleware = ServicesMiddleware(
+            database=database,
+            system_service=system_service,
+            monitoring_service=monitoring_service,
+        )
         result = await middleware(handler, MagicMock(), data)
 
     assert result == "handled"
@@ -134,7 +142,14 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     assert data["notification_service"] is mocks["NotificationService"].return_value
     assert data["admin_service"] is mocks["AdminService"].return_value
     assert data["referral_service"] is mocks["ReferralService"].return_value
+    mocks["AIMonitoringService"].assert_called_once_with(
+        provider_repository=mocks["AIProviderRepository"].return_value,
+        report_repository=mocks["AIReportRepository"].return_value,
+        transaction_manager=transaction_manager,
+    )
     assert data["system_service"] is system_service
+    assert data["ai_monitoring_service"] is mocks["AIMonitoringService"].return_value
+    assert data["monitoring_service"] is monitoring_service
     handler.assert_awaited_once()
 
 

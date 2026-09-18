@@ -28,6 +28,7 @@ from handlers.admin_force_subscription import router as admin_force_subscription
 from handlers.admin_force_subscription_stats import router as admin_force_subscription_stats_router
 from handlers.admin_management import router as admin_management_router
 from handlers.admin_referral_stats import router as admin_referral_stats_router
+from handlers.admin_ai_monitoring import router as admin_ai_monitoring_router
 from handlers.admin_settings import router as admin_settings_router
 from handlers.admin_stats_refresh import router as admin_stats_refresh_router
 from handlers.admin_support import router as admin_support_router
@@ -154,19 +155,27 @@ async def main() -> None:
         active_admin_ids = await bootstrap_admin_system(database)
         await setup_bot_commands(bot, active_admin_ids)
 
+        # Always built so the admin panel can run "analyse now"; the
+        # background loop itself is opt-in via MONITORING_ENABLED.
+        monitoring_service = build_monitoring_service(
+            database=database,
+            system_service=system_service,
+            log_buffer=log_buffer,
+            bot=bot,
+        )
         if MONITORING_ENABLED:
             monitoring_task = start_monitoring(
-                build_monitoring_service(
-                    database=database,
-                    system_service=system_service,
-                    log_buffer=log_buffer,
-                    bot=bot,
-                ),
-                interval_seconds=MONITORING_INTERVAL_SECONDS,
+                monitoring_service, interval_seconds=MONITORING_INTERVAL_SECONDS
             )
 
         dp.update.middleware(LoggingMiddleware(system_service=system_service))
-        dp.update.middleware(ServicesMiddleware(database=database, system_service=system_service))
+        dp.update.middleware(
+            ServicesMiddleware(
+                database=database,
+                system_service=system_service,
+                monitoring_service=monitoring_service,
+            )
+        )
         dp.update.middleware(MaintenanceMiddleware())
         dp.update.middleware(UserMiddleware())
         dp.update.middleware(ForceSubscriptionMiddleware())
@@ -190,6 +199,7 @@ async def main() -> None:
             admin_cancel_router,
             admin_broadcast_router,
             admin_settings_router,
+            admin_ai_monitoring_router,
             admin_force_subscription_router,
             admin_support_settings_router,
             admin_support_router,

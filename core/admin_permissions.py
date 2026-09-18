@@ -12,4 +12,5 @@ ADMIN_PERMISSION_REGISTRY: tuple[AdminPermission, ...] = (
     AdminPermission("broadcast", "📢 ارسال همگانی", "ارسال پیام همگانی"),
     AdminPermission("settings", "⚙️ تنظیمات ربات", "مدیریت تنظیمات ربات"),
     AdminPermission("admins", "🛡 مدیریت ادمین‌ها", "افزودن و مدیریت ادمین‌های دیگر"),
+    AdminPermission("ai_monitoring", "🤖 مانیتور هوشمند", "مدیریت مدل‌های هوش مصنوعی و گزارش‌های سلامت"),
 )

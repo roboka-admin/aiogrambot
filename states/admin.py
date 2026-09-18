@@ -22,3 +22,7 @@ class AdminForceSubscriptionStates(StatesGroup):
 class AdminManagementStates(StatesGroup):
     waiting_for_admin_id = State()
     waiting_for_permission_selection = State()
+
+
+class AdminAIMonitoringStates(StatesGroup):
+    waiting_for_model_name = State()
