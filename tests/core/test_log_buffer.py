@@ -71,3 +71,56 @@ def test_buffer_respects_time_window_and_capacity() -> None:
     samples = sorted(issue.sample for issue in buffer.issues_since(since))
     assert samples == ["three", "two"]
     assert buffer.issues_since(tehran_now() + timedelta(minutes=1)) == []
+
+
+def test_buffer_flags_first_occurrence_of_an_error_fingerprint_as_new() -> None:
+    buffer = ErrorLogBuffer()
+    logger = _logger("test.buffer.new", buffer)
+    since = tehran_now() - timedelta(seconds=1)
+
+    logger.error("Payment failed for %s", 1)
+    logger.error("Payment failed for %s", 2)
+    logger.warning("Slow query")  # warnings are never "new"
+
+    by_level = {issue.level: issue for issue in buffer.issues_since(since)}
+    assert by_level["ERROR"].is_new is True
+    assert by_level["ERROR"].count == 2
+    assert by_level["WARNING"].is_new is False
+
+    # A later window that only contains repeats is not "new" anymore.
+    later = tehran_now()
+    logger.error("Payment failed for %s", 3)
+    (issue,) = buffer.issues_since(later)
+    assert issue.is_new is False
+
+
+def test_buffer_notifies_listeners_for_errors_only_with_exception_type() -> None:
+    buffer = ErrorLogBuffer()
+    logger = _logger("test.buffer.listen", buffer)
+    seen = []
+    buffer.subscribe(seen.append)
+
+    logger.warning("ignored by listeners")
+    try:
+        raise ConnectionError("db gone")
+    except ConnectionError:
+        logger.exception("Query failed")
+    logger.error("Plain error")
+
+    assert [issue.exc_type for issue in seen] == ["ConnectionError", ""]
+    assert seen[0].is_new is True and seen[0].count == 1
+    assert seen[0].sample.endswith("[ConnectionError]")
+
+
+def test_listener_exception_does_not_break_logging() -> None:
+    buffer = ErrorLogBuffer()
+    logger = _logger("test.buffer.badlistener", buffer)
+    since = tehran_now() - timedelta(seconds=1)
+
+    def bad(_issue):
+        raise RuntimeError("listener bug")
+
+    buffer.subscribe(bad)
+    logger.error("still recorded")
+
+    assert len(buffer.issues_since(since)) == 1

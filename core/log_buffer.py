@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -39,6 +40,13 @@ class LogIssue:
     count: int
     first_seen_at: datetime
     last_seen_at: datetime
+    exc_type: str = ""
+    # True when this fingerprint was seen at ERROR+ for the first time since
+    # process start inside the queried window: "a new kind of failure".
+    is_new: bool = False
+
+
+IssueListener = Callable[[LogIssue], None]
 
 
 @dataclass(slots=True)
@@ -49,6 +57,8 @@ class _Entry:
     logger_name: str
     sample: str
     seen_at: datetime
+    exc_type: str = ""
+    is_new: bool = False
 
 
 class ErrorLogBuffer(logging.Handler):
@@ -64,6 +74,16 @@ class ErrorLogBuffer(logging.Handler):
         self._entries: deque[_Entry] = deque(maxlen=max_entries)
         self._ignored_loggers = ignored_loggers
         self._lock = threading.Lock()
+        self._known_error_fingerprints: set[str] = set()
+        self._listeners: list[IssueListener] = []
+
+    def subscribe(self, listener: IssueListener) -> None:
+        """Get every ERROR+ record as a single-entry ``LogIssue``, synchronously.
+
+        Called from whichever thread emitted the log record, so listeners must
+        be cheap and thread-safe (hand off to an event loop, never block).
+        """
+        self._listeners.append(listener)
 
     def emit(self, record: logging.LogRecord) -> None:
         if record.levelno < logging.WARNING:
@@ -84,16 +104,29 @@ class ErrorLogBuffer(logging.Handler):
             exc_type = record.exc_info[0].__name__
             sample = f"{sample} [{exc_type}]"
 
+        fingerprint = f"{record.name}|{record.levelname}|{record.msg}|{exc_type}"
         entry = _Entry(
-            fingerprint=f"{record.name}|{record.levelname}|{record.msg}|{exc_type}",
+            fingerprint=fingerprint,
             level=record.levelname,
             levelno=record.levelno,
             logger_name=record.name,
             sample=sample[:_SAMPLE_MAX_CHARS],
             seen_at=tehran_now(),
+            exc_type=exc_type,
         )
         with self._lock:
+            if entry.levelno >= logging.ERROR and fingerprint not in self._known_error_fingerprints:
+                self._known_error_fingerprints.add(fingerprint)
+                entry.is_new = True
             self._entries.append(entry)
+
+        if entry.levelno >= logging.ERROR and self._listeners:
+            issue = _issue_from_entries([entry])
+            for listener in self._listeners:
+                try:
+                    listener(issue)
+                except Exception:  # pragma: no cover - a listener must never break logging
+                    pass
 
     def issues_since(self, since: datetime) -> list[LogIssue]:
         """Group entries seen at or after ``since``; most frequent first."""
@@ -104,18 +137,7 @@ class ErrorLogBuffer(logging.Handler):
         for entry in entries:
             grouped.setdefault(entry.fingerprint, []).append(entry)
 
-        issues = [
-            LogIssue(
-                fingerprint=fingerprint,
-                level=group[-1].level,
-                logger_name=group[-1].logger_name,
-                sample=group[-1].sample,
-                count=len(group),
-                first_seen_at=group[0].seen_at,
-                last_seen_at=group[-1].seen_at,
-            )
-            for fingerprint, group in grouped.items()
-        ]
+        issues = [_issue_from_entries(group) for group in grouped.values()]
         issues.sort(key=lambda issue: (-issue.count, issue.last_seen_at))
         return issues
 
@@ -126,3 +148,18 @@ class ErrorLogBuffer(logging.Handler):
                 for entry in self._entries
                 if entry.seen_at >= since and entry.levelno >= min_level
             )
+
+
+def _issue_from_entries(group: list[_Entry]) -> LogIssue:
+    last = group[-1]
+    return LogIssue(
+        fingerprint=last.fingerprint,
+        level=last.level,
+        logger_name=last.logger_name,
+        sample=last.sample,
+        count=len(group),
+        first_seen_at=group[0].seen_at,
+        last_seen_at=last.seen_at,
+        exc_type=last.exc_type,
+        is_new=any(entry.is_new for entry in group),
+    )

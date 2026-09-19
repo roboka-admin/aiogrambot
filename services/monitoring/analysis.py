@@ -31,6 +31,7 @@ AnalysisRepositoryFactory = Callable[
 ]
 
 _MAX_OUTPUT_TOKENS = 350
+_URGENT_OUTPUT_TOKENS = 200
 _MAX_ISSUES = 5
 _MAX_SAMPLE_CHARS = 160
 
@@ -51,6 +52,11 @@ DIGEST_INSTRUCTION = (
     "overall health trend and mention anything worth watching."
 )
 ANOMALY_INSTRUCTION = "These anomalies were just detected. Diagnose them."
+URGENT_INSTRUCTION = (
+    "URGENT triage: a serious error just appeared in the logs (see anomalies/"
+    "issues). Focus on that error only: is the bot likely broken for users, "
+    "what most probably caused it, what to check first. Be brief."
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,7 +107,7 @@ class AIAnalyzer:
         request = AIRequest(
             system=SYSTEM_PROMPT,
             user=build_user_prompt(snapshot, anomalies, kind=kind),
-            max_tokens=_MAX_OUTPUT_TOKENS,
+            max_tokens=_URGENT_OUTPUT_TOKENS if kind is AIReportKind.URGENT else _MAX_OUTPUT_TOKENS,
         )
         try:
             result = await self._router.complete(request)
@@ -174,7 +180,12 @@ def build_user_prompt(
             for issue in snapshot.issues[:_MAX_ISSUES]
         ],
     }
-    instruction = DIGEST_INSTRUCTION if kind is AIReportKind.DIGEST else ANOMALY_INSTRUCTION
+    if kind is AIReportKind.DIGEST:
+        instruction = DIGEST_INSTRUCTION
+    elif kind is AIReportKind.URGENT:
+        instruction = URGENT_INSTRUCTION
+    else:
+        instruction = ANOMALY_INSTRUCTION
     return f"{instruction}\n{json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}"
 
 

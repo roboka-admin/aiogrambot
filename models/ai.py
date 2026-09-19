@@ -52,6 +52,7 @@ class AIReportKind(str, Enum):
     ANOMALY = "anomaly"  # triggered by rule anomalies
     DIGEST = "digest"  # scheduled periodic summary
     MANUAL = "manual"  # admin pressed "analyse now"
+    URGENT = "urgent"  # fast path: a serious log error, outside the schedule
 
 
 @dataclass(slots=True)

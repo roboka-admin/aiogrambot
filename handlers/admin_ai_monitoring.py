@@ -43,7 +43,7 @@ _STATUS_LABEL = {
 }
 _KIND_LABEL = {"gemini": "Gemini API", "openai_compatible": "OpenAI-compatible"}
 _SEVERITY_ICON = {"critical": "🚨", "warning": "⚠️", "info": "ℹ️"}
-_REPORT_KIND_LABEL = {"anomaly": "هشدار", "digest": "دوره‌ای", "manual": "دستی"}
+_REPORT_KIND_LABEL = {"anomaly": "هشدار", "digest": "دوره‌ای", "manual": "دستی", "urgent": "فوری"}
 
 
 # ------------------------------------------------------------------- home

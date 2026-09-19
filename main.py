@@ -167,6 +167,8 @@ async def main() -> None:
             monitoring_task = start_monitoring(
                 monitoring_service, interval_seconds=MONITORING_INTERVAL_SECONDS
             )
+            # Fast path: serious log errors trigger an out-of-band cycle.
+            monitoring_service.attach_log_buffer()
 
         dp.update.middleware(LoggingMiddleware(system_service=system_service))
         dp.update.middleware(

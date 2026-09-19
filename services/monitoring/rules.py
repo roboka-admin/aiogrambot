@@ -6,9 +6,11 @@ layer can be handed *only* the anomalies that actually fired.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from enum import Enum
 
+from core.log_buffer import LogIssue
 from services.monitoring.snapshot import MonitoringSnapshot
 
 
@@ -29,6 +31,9 @@ class Anomaly:
     severity: Severity
     title: str
     detail: str
+    # Point-in-time findings (a log line happened) rather than ongoing states
+    # (RAM is high). They get a per-key cooldown but no "resolved" follow-up.
+    transient: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +55,33 @@ class Thresholds:
 
 
 DEFAULT_THRESHOLDS = Thresholds()
+
+# Exception classes whose *first occurrence* means the bot is (about to be)
+# broken for everyone, regardless of how many times they repeat.
+FATAL_EXCEPTION_TYPES: frozenset[str] = frozenset(
+    {
+        # SQLAlchemy / DBAPI: connection lost, server gone, pool exhausted
+        "OperationalError",
+        "InterfaceError",
+        "DisconnectionError",
+        "TimeoutError",
+        # Telegram: token revoked / bot deleted, or another instance polling
+        "TelegramUnauthorized",
+        "TelegramConflictError",
+        # Process-level
+        "MemoryError",
+        "OSError",
+    }
+)
+
+
+def is_fatal_issue(issue: LogIssue) -> bool:
+    return issue.level in {"ERROR", "CRITICAL"} and issue.exc_type in FATAL_EXCEPTION_TYPES
+
+
+def is_urgent_issue(issue: LogIssue) -> bool:
+    """A log issue that should not wait for the next scheduled cycle."""
+    return is_fatal_issue(issue) or (issue.is_new and issue.level in {"ERROR", "CRITICAL"})
 
 
 def evaluate(snapshot: MonitoringSnapshot, thresholds: Thresholds = DEFAULT_THRESHOLDS) -> list[Anomaly]:
@@ -166,6 +198,30 @@ def evaluate(snapshot: MonitoringSnapshot, thresholds: Thresholds = DEFAULT_THRE
             )
         )
 
+    # Log-based rules: a single occurrence matters, so keys carry the
+    # fingerprint and each distinct failure gets its own cooldown.
+    for issue in snapshot.issues:
+        if is_fatal_issue(issue):
+            anomalies.append(
+                Anomaly(
+                    key=f"fatal_error:{_short_hash(issue.fingerprint)}",
+                    severity=Severity.CRITICAL,
+                    title=f"خطای بحرانی: {issue.exc_type}",
+                    detail=f"×{issue.count} {issue.logger_name}: {issue.sample[:120]}",
+                    transient=True,
+                )
+            )
+        elif issue.is_new and issue.level in {"ERROR", "CRITICAL"}:
+            anomalies.append(
+                Anomaly(
+                    key=f"new_error:{_short_hash(issue.fingerprint)}",
+                    severity=Severity.WARNING,
+                    title="خطای جدید (اولین بار دیده شد)",
+                    detail=f"{issue.logger_name}: {issue.sample[:120]}",
+                    transient=True,
+                )
+            )
+
     if activity.bot_blocked_by_users >= thresholds.bot_blocked_warning:
         anomalies.append(
             Anomaly(
@@ -201,3 +257,7 @@ def _errors_detail(errors: int, updates: int) -> str:
     if updates:
         return f"{errors} خطا در {updates} آپدیت ({errors / updates:.0%})"
     return f"{errors} خطا"
+
+
+def _short_hash(value: str) -> str:
+    return hashlib.sha1(value.encode("utf-8")).hexdigest()[:8]

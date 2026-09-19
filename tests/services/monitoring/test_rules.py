@@ -1,7 +1,9 @@
+from dataclasses import replace
 from datetime import timedelta
 
+from core.log_buffer import LogIssue
 from core.timezone import tehran_now
-from services.monitoring.rules import Severity, Thresholds, evaluate
+from services.monitoring.rules import Severity, Thresholds, evaluate, is_urgent_issue
 from services.monitoring.snapshot import (
     ActivityMetrics,
     DatabaseMetrics,
@@ -100,3 +102,62 @@ def test_custom_thresholds_are_respected() -> None:
     assert [a.key for a in anomalies] == ["memory"]
     assert anomalies[0].severity is Severity.WARNING
     assert "32%" in anomalies[0].detail
+
+
+def _issue(level="ERROR", exc_type="", is_new=False, sample="boom", count=1) -> LogIssue:
+    now = tehran_now()
+    return LogIssue(
+        fingerprint=f"app|{level}|{sample}|{exc_type}",
+        level=level,
+        logger_name="app",
+        sample=sample,
+        count=count,
+        first_seen_at=now,
+        last_seen_at=now,
+        exc_type=exc_type,
+        is_new=is_new,
+    )
+
+
+def test_fatal_exception_type_is_critical_even_when_seen_once_and_not_new():
+    snapshot = replace(make_snapshot(), issues=(_issue(exc_type="OperationalError"),))
+    anomalies = evaluate(snapshot)
+    assert len(anomalies) == 1
+    assert anomalies[0].severity is Severity.CRITICAL
+    assert anomalies[0].key.startswith("fatal_error:")
+    assert anomalies[0].transient is True
+    assert "OperationalError" in anomalies[0].title
+
+
+def test_new_error_fingerprint_is_a_warning_but_repeats_and_warnings_are_not():
+    snapshot = replace(
+        make_snapshot(),
+        issues=(
+            _issue(is_new=True, sample="first time"),
+            _issue(is_new=False, sample="seen before", count=40),
+            _issue(level="WARNING", is_new=True, sample="just a warning"),
+        ),
+    )
+    anomalies = evaluate(snapshot)
+    assert [a.severity for a in anomalies] == [Severity.WARNING]
+    assert anomalies[0].key.startswith("new_error:")
+    assert "first time" in anomalies[0].detail
+
+
+def test_distinct_fatal_errors_get_distinct_keys():
+    snapshot = replace(
+        make_snapshot(),
+        issues=(
+            _issue(exc_type="OperationalError", sample="a"),
+            _issue(exc_type="TelegramUnauthorized", sample="b"),
+        ),
+    )
+    keys = {a.key for a in evaluate(snapshot)}
+    assert len(keys) == 2
+
+
+def test_is_urgent_issue_matches_fast_path_policy():
+    assert is_urgent_issue(_issue(exc_type="MemoryError")) is True
+    assert is_urgent_issue(_issue(is_new=True)) is True
+    assert is_urgent_issue(_issue(is_new=False)) is False
+    assert is_urgent_issue(_issue(level="WARNING", is_new=True)) is False

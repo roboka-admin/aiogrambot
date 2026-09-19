@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
@@ -83,6 +84,9 @@ def build(
     *,
     system: FakeSystemService | None = None,
     cooldown: timedelta = timedelta(hours=1),
+    log_buffer: ErrorLogBuffer | None = None,
+    urgent_debounce: timedelta = timedelta(minutes=2),
+    urgent_max_per_hour: int = 5,
 ) -> tuple[MonitoringService, FakeSystemService, FakeGateway, FakeUserRepository, FakeAntiSpamRepository]:
     system = system or FakeSystemService()
     gateway = FakeGateway()
@@ -98,11 +102,13 @@ def build(
 
     service = MonitoringService(
         system_service=system,  # type: ignore[arg-type]
-        log_buffer=ErrorLogBuffer(),
+        log_buffer=log_buffer or ErrorLogBuffer(),
         telegram_gateway=gateway,
         repository_factory=scope,
         admin_ids_provider=admins,
         alert_cooldown=cooldown,
+        urgent_debounce=urgent_debounce,
+        urgent_max_per_hour=urgent_max_per_hour,
     )
     return service, system, gateway, users, antispam
 
@@ -310,4 +316,136 @@ async def test_analyse_now_returns_manual_report_without_sending() -> None:
 
     assert [a.key for a in anomalies] == ["memory"]
     assert analysis is not None and analysis.report.kind.value == "manual"
+    assert gateway.messages == []
+
+
+# ------------------------------------------------------------- fast path
+
+
+def _error_logger(name: str, buffer: ErrorLogBuffer) -> logging.Logger:
+    log = logging.getLogger(name)
+    log.handlers = [buffer]
+    log.propagate = False
+    log.setLevel(logging.DEBUG)
+    return log
+
+
+@pytest.mark.asyncio
+async def test_new_error_in_log_triggers_urgent_alert_without_waiting_for_schedule() -> None:
+    buffer = ErrorLogBuffer()
+    service, _, gateway, _, _ = build(log_buffer=buffer, urgent_debounce=timedelta(seconds=0.24))
+    service.attach_log_buffer()
+    log = _error_logger("test.urgent.new", buffer)
+
+    log.error("Something exploded in handler %s", "start")
+    assert service._urgent_task is not None
+    await service._urgent_task
+
+    assert [admin for admin, _ in gateway.messages] == [100, 200]
+    text = gateway.messages[0][1]
+    assert text.startswith("🚨 هشدار فوری")
+    assert "خطای جدید" in text
+    assert "Something exploded in handler start" in text
+
+
+@pytest.mark.asyncio
+async def test_fatal_exception_is_critical_and_ai_gets_urgent_kind() -> None:
+    buffer = ErrorLogBuffer()
+    analyzer = FakeAnalyzer()
+    service, _, gateway, _, _ = build(log_buffer=buffer, urgent_debounce=timedelta(seconds=0.24))
+    service._analyzer = analyzer
+    service.attach_log_buffer()
+    log = _error_logger("test.urgent.fatal", buffer)
+
+    class OperationalError(Exception):
+        pass
+
+    try:
+        raise OperationalError("MySQL server has gone away")
+    except OperationalError:
+        log.exception("Query failed")
+    await service._urgent_task
+
+    text = gateway.messages[0][1]
+    assert "🚨 خطای بحرانی: OperationalError" in text
+    assert "تحلیل هوشمند" in text
+    assert analyzer.calls[0][0] == "urgent"
+
+
+@pytest.mark.asyncio
+async def test_repeated_known_error_does_not_trigger_fast_path() -> None:
+    buffer = ErrorLogBuffer()
+    service, _, gateway, _, _ = build(log_buffer=buffer, urgent_debounce=timedelta(seconds=0.24))
+    service.attach_log_buffer()
+    log = _error_logger("test.urgent.repeat", buffer)
+
+    log.error("Flaky thing")
+    await service._urgent_task
+    first_task = service._urgent_task
+    sent = len(gateway.messages)
+
+    log.error("Flaky thing")  # same fingerprint, no exception type -> not urgent
+    assert service._urgent_task is first_task
+    assert len(gateway.messages) == sent
+
+
+@pytest.mark.asyncio
+async def test_burst_of_errors_is_debounced_into_one_run_and_capped_per_hour() -> None:
+    buffer = ErrorLogBuffer()
+    service, _, gateway, _, _ = build(
+        log_buffer=buffer, urgent_debounce=timedelta(seconds=0.24), urgent_max_per_hour=2
+    )
+    service.attach_log_buffer()
+    log = _error_logger("test.urgent.burst", buffer)
+
+    for index in range(10):
+        log.error("Distinct error number %s", index)  # same template -> one fingerprint
+    log.error("Another template")
+    task = service._urgent_task
+    await task
+    assert len(gateway.messages) == 2  # one report, two admins
+
+    await asyncio.sleep(0.3)  # leave the debounce window
+    log.error("Third template")
+    await service._urgent_task
+    assert len(gateway.messages) == 4
+
+    await asyncio.sleep(0.3)
+    log.error("Fourth template")  # cap of 2 per hour reached -> no new task
+    assert service._urgent_task.done()
+    assert len(gateway.messages) == 4
+
+
+@pytest.mark.asyncio
+async def test_transient_log_alert_has_no_resolved_followup_and_respects_cooldown() -> None:
+    buffer = ErrorLogBuffer()
+    service, _, gateway, _, _ = build(log_buffer=buffer)
+    log = _error_logger("test.urgent.transient", buffer)
+
+    log.error("One-off failure")
+    await service.run_cycle()
+    assert len(gateway.messages) == 2
+    assert "خطای جدید" in gateway.messages[0][1]
+
+    # Next cycle: the line has left the window. Nothing to say.
+    await service.run_cycle()
+    assert len(gateway.messages) == 2
+
+    # Same fingerprint again inside the cooldown: is_new is False now, so
+    # the rule does not even fire; no duplicate report.
+    log.error("One-off failure")
+    await service.run_cycle()
+    assert len(gateway.messages) == 2
+
+
+@pytest.mark.asyncio
+async def test_on_log_issue_is_a_noop_before_attach() -> None:
+    buffer = ErrorLogBuffer()
+    service, _, gateway, _, _ = build(log_buffer=buffer)
+    log = _error_logger("test.urgent.detached", buffer)
+    buffer.subscribe(service.on_log_issue)  # subscribed but loop never attached
+
+    log.error("Nobody is listening")
+    await asyncio.sleep(0.05)
+    assert service._urgent_task is None
     assert gateway.messages == []
