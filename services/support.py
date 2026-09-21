@@ -2,7 +2,9 @@ from datetime import timedelta
 
 from core.timezone import tehran_now
 from core.transaction import NullTransactionManager, TransactionManager, transactional
+from models import event_counter as counters
 from models.support import SupportStatus, SupportTicket, SupportUserSummary
+from repositories.interfaces.event_counter import IEventCounterRepository
 from repositories.interfaces.support import ISupportRepository
 
 
@@ -12,8 +14,11 @@ class SupportService:
         *,
         support_repository: ISupportRepository,
         transaction_manager: TransactionManager | None = None,
+        counter_repository: IEventCounterRepository | None = None,
     ) -> None:
         self._support_repository = support_repository
+        # Closed tickets archived by retention still count towards lifetime totals.
+        self._counter_repository = counter_repository
         self._transaction_manager = transaction_manager or NullTransactionManager()
 
     @transactional
@@ -55,6 +60,7 @@ class SupportService:
         if ticket is None:
             return None
         ticket.status = SupportStatus.CLOSED
+        ticket.closed_at = tehran_now()
         return await self._support_repository.update(ticket)
 
     @transactional
@@ -80,10 +86,15 @@ class SupportService:
         seven_days_ago = today_start - timedelta(days=7)
         thirty_days_ago = today_start - timedelta(days=30)
 
+        archived_closed = 0
+        if self._counter_repository is not None:
+            archived_closed = await self._counter_repository.get(counters.SUPPORT_TICKETS_CLOSED)
+
         return {
-            "total": await self._support_repository.count_total(),
+            "total": archived_closed + await self._support_repository.count_total(),
             "open": await self._support_repository.count_by_status(SupportStatus.OPEN),
-            "closed": await self._support_repository.count_by_status(SupportStatus.CLOSED),
+            "closed": archived_closed
+            + await self._support_repository.count_by_status(SupportStatus.CLOSED),
             "today": await self._support_repository.count_today(today_start),
             "last_7_days": await self._support_repository.count_last_7_days(seven_days_ago),
             "last_30_days": await self._support_repository.count_last_30_days(thirty_days_ago),

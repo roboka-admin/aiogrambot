@@ -55,6 +55,7 @@ from repositories.ai import AIProviderRepository, AIReportRepository
 from repositories.antispam import AntiSpamRepository
 from repositories.event_counter import EventCounterRepository
 from repositories.force_subscription_event import ForceSubscriptionEventRepository
+from repositories.support import SupportRepository
 from repositories.bot_settings import BotSettingsRepository
 from repositories.user import UserRepository
 from services.admin import AdminService
@@ -95,6 +96,7 @@ def build_retention_service(database: Database) -> RetentionService:
                     membership=ForceSubscriptionEventRepository(session),
                     ai_reports=AIReportRepository(session),
                     counters=EventCounterRepository(session),
+                    support=SupportRepository(session),
                 )
 
     return RetentionService(scope=scope, retention_days=EVENT_RETENTION_DAYS)

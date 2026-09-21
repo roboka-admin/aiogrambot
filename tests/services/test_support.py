@@ -149,3 +149,44 @@ async def test_support_statistics_count_status_and_time_windows(service_and_repo
     assert stats["today"] == 1
     assert stats["last_7_days"] == 1
     assert stats["last_30_days"] == 1
+
+
+class FakeCounterRepository:
+    def __init__(self, values: dict[str, int]) -> None:
+        self.values = values
+
+    async def add(self, kind: str, amount: int) -> None:
+        self.values[kind] = self.values.get(kind, 0) + amount
+
+    async def get(self, kind: str) -> int:
+        return self.values.get(kind, 0)
+
+
+@pytest.mark.asyncio
+async def test_close_ticket_stamps_closed_at(service_and_repository):
+    service, _ = service_and_repository
+    ticket = await service.create_ticket(user_telegram_id=1, message="help")
+    assert ticket.closed_at is None
+
+    closed = await service.close_ticket(ticket.id)
+
+    assert closed.status is SupportStatus.CLOSED
+    assert closed.closed_at is not None
+    assert tehran_now() - closed.closed_at < timedelta(seconds=5)
+
+
+@pytest.mark.asyncio
+async def test_statistics_include_closed_tickets_archived_by_retention():
+    repository = FakeSupportRepository()
+    counters = FakeCounterRepository({"support_tickets_closed": 70})
+    service = SupportService(support_repository=repository, counter_repository=counters)
+
+    ticket = await service.create_ticket(user_telegram_id=1, message="a")
+    await service.close_ticket(ticket.id)
+    await service.create_ticket(user_telegram_id=2, message="b")
+
+    statistics = await service.get_support_statistics()
+    assert statistics["total"] == 72
+    assert statistics["closed"] == 71
+    assert statistics["open"] == 1
+    assert statistics["today"] == 2

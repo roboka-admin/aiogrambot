@@ -62,6 +62,7 @@ class ServicesMiddleware(BaseMiddleware):
             transaction_manager = SessionTransactionManager(session)
             user_repository = UserRepository(session)
             support_repository = SupportRepository(session)
+            event_counter_repository = EventCounterRepository(session)
             antispam_repository = AntiSpamRepository(session)
             bot_settings_repository = BotSettingsRepository(session)
             force_subscription_repository = ForceSubscriptionRepository(session)
@@ -71,7 +72,6 @@ class ServicesMiddleware(BaseMiddleware):
             referral_reward_repository = ReferralRewardRepository(session)
             ai_provider_repository = AIProviderRepository(session)
             ai_report_repository = AIReportRepository(session)
-            event_counter_repository = EventCounterRepository(session)
             telegram_gateway = AiogramTelegramGateway(data["bot"])
 
             @asynccontextmanager
@@ -90,6 +90,7 @@ class ServicesMiddleware(BaseMiddleware):
             support_service = SupportService(
                 support_repository=support_repository,
                 transaction_manager=transaction_manager,
+                counter_repository=event_counter_repository,
             )
             bot_settings_service = BotSettingsService(
                 bot_settings_repository=bot_settings_repository,

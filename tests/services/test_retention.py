@@ -45,6 +45,19 @@ class FakeReports:
         return len(victims)
 
 
+class FakeSupport:
+    def __init__(self) -> None:
+        self.rows: list[tuple[str, datetime | None]] = []  # (status, closed_at)
+
+    async def delete_closed_before(self, cutoff, limit) -> int:
+        victims = [
+            r for r in self.rows if r[0] == "closed" and r[1] is not None and r[1] < cutoff
+        ][:limit]
+        for victim in victims:
+            self.rows.remove(victim)
+        return len(victims)
+
+
 class FakeCounters:
     def __init__(self) -> None:
         self.values: dict[str, int] = {}
@@ -61,7 +74,11 @@ class Scope:
 
     def __init__(self) -> None:
         self.repos = RetentionRepositories(
-            antispam=FakeAntiSpam(), membership=FakeMembership(), ai_reports=FakeReports(), counters=FakeCounters()
+            antispam=FakeAntiSpam(),
+            membership=FakeMembership(),
+            ai_reports=FakeReports(),
+            counters=FakeCounters(),
+            support=FakeSupport(),
         )
         self.transactions = 0
 
@@ -72,12 +89,12 @@ class Scope:
 
 
 NOW = tehran_now()
-OLD = NOW - timedelta(days=100)
+OLD = NOW - timedelta(days=40)
 RECENT = NOW - timedelta(days=10)
 
 
 def make(scope: Scope, **kwargs) -> RetentionService:
-    return RetentionService(scope=scope, retention_days=90, **kwargs)
+    return RetentionService(scope=scope, retention_days=31, **kwargs)
 
 
 async def test_old_rows_are_pruned_and_folded_into_counters_recent_rows_stay():
@@ -93,7 +110,12 @@ async def test_old_rows_are_pruned_and_folded_into_counters_recent_rows_stay():
 
     result = await make(scope).run_once(NOW)
 
-    assert result.deleted == {"antispam_events": 3, "membership_events": 3, "ai_reports": 1}
+    assert result.deleted == {
+        "antispam_events": 3,
+        "membership_events": 3,
+        "ai_reports": 1,
+        "support_tickets_closed": 0,
+    }
     assert scope.repos.antispam.rows == [(RECENT, AntiSpamEventType.WARNING)]
     assert scope.repos.membership.rows == [(RECENT, 1)]
     assert scope.repos.ai_reports.rows == [RECENT]
@@ -123,8 +145,9 @@ async def test_large_backlog_is_deleted_in_batches_each_in_its_own_transaction()
 
     assert result.deleted["ai_reports"] == 12
     # 5 + 5 + 2 -> three transactions for reports; antispam adds one per type,
-    # membership one for the id lookup (no targets -> no delete batches).
-    assert scope.transactions == 3 + 2 + 1
+    # membership one for the id lookup (no targets -> no delete batches),
+    # closed tickets one empty batch.
+    assert scope.transactions == 3 + 2 + 1 + 1
 
 
 async def test_max_batches_bounds_one_run_and_the_rest_waits_for_next_run():
@@ -153,6 +176,23 @@ async def test_failure_in_one_table_does_not_stop_the_others():
 
     assert result.deleted["antispam_events"] == 0
     assert result.deleted["ai_reports"] == 1
+
+
+async def test_only_old_closed_tickets_are_pruned_open_and_recent_stay():
+    scope = Scope()
+    scope.repos.support.rows = [
+        ("closed", OLD),
+        ("closed", OLD),
+        ("closed", RECENT),
+        ("open", None),
+        ("closed", None),  # legacy row without close time: never guessed at
+    ]
+
+    result = await make(scope).run_once(NOW)
+
+    assert result.deleted["support_tickets_closed"] == 2
+    assert scope.repos.support.rows == [("closed", RECENT), ("open", None), ("closed", None)]
+    assert scope.repos.counters.values[counters.SUPPORT_TICKETS_CLOSED] == 2
 
 
 def test_retention_shorter_than_statistics_window_is_rejected():

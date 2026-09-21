@@ -96,6 +96,7 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     mocks["SupportService"].assert_called_once_with(
         support_repository=mocks["SupportRepository"].return_value,
         transaction_manager=transaction_manager,
+        counter_repository=mocks["EventCounterRepository"].return_value,
     )
     mocks["BotSettingsService"].assert_called_once_with(
         bot_settings_repository=mocks["BotSettingsRepository"].return_value,

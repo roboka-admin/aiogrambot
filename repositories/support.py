@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import delete as sql_delete, func, select, update as sql_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.timezone import tehran_now
 from models.support import SupportStatus, SupportTicket, SupportUserSummary
 from models.support_db import SupportTicketRecord
 from repositories.interfaces.support import ISupportRepository
@@ -18,6 +19,7 @@ class SupportRepository(ISupportRepository):
             message=ticket.message,
             status=ticket.status.value,
             created_at=ticket.created_at,
+            closed_at=ticket.closed_at,
         )
         self._session.add(record)
         await self._session.flush()
@@ -89,6 +91,7 @@ class SupportRepository(ISupportRepository):
 
         record.message = ticket.message
         record.status = ticket.status.value
+        record.closed_at = ticket.closed_at
         await self._session.flush()
         return self._to_domain(record)
 
@@ -97,10 +100,11 @@ class SupportRepository(ISupportRepository):
         telegram_id: int,
         status: SupportStatus,
     ) -> int:
+        closed_at = tehran_now() if status is SupportStatus.CLOSED else None
         result = await self._session.execute(
             sql_update(SupportTicketRecord)
             .where(SupportTicketRecord.user_telegram_id == telegram_id)
-            .values(status=status.value)
+            .values(status=status.value, closed_at=closed_at)
         )
         await self._session.flush()
         return result.rowcount or 0
@@ -113,6 +117,19 @@ class SupportRepository(ISupportRepository):
         )
         await self._session.flush()
         return result.rowcount or 0
+
+    async def delete_closed_before(self, cutoff: datetime, limit: int) -> int:
+        """Delete up to ``limit`` tickets closed before ``cutoff``; returns rows removed."""
+        result = await self._session.execute(
+            sql_delete(SupportTicketRecord)
+            .where(
+                SupportTicketRecord.status == SupportStatus.CLOSED.value,
+                SupportTicketRecord.closed_at.is_not(None),
+                SupportTicketRecord.closed_at < cutoff,
+            )
+            .with_dialect_options(mysql_limit=limit)
+        )
+        return int(result.rowcount or 0)
 
     async def delete_all(self) -> int:
         result = await self._session.execute(sql_delete(SupportTicketRecord))
@@ -167,4 +184,5 @@ class SupportRepository(ISupportRepository):
             message=record.message,
             status=SupportStatus(record.status),
             created_at=record.created_at,
+            closed_at=record.closed_at,
         )

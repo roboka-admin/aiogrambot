@@ -26,3 +26,4 @@ class SupportTicketRecord(Base):
         default=tehran_now,
         nullable=False,
     )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

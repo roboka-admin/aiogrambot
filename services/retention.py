@@ -4,13 +4,14 @@ Three tables only ever receive INSERTs and are read back as counts over
 windows of at most 30 days: ``antispam_events``,
 ``force_subscription_membership_events`` and ``ai_reports``. Without a
 retention policy they grow with traffic forever, and every "all time" COUNT
-gets slower with them.
+gets slower with them. Closed support tickets follow the same policy, keyed
+on ``closed_at`` rather than ``created_at`` (open tickets are never touched).
 
 Policy: rows older than ``retention_days`` are deleted in small batches; the
 number of rows removed is folded into ``event_counters`` inside the same
 transaction, so lifetime totals shown to admins stay exact
-(``total = archived + live``). Business tables (users, support tickets,
-referral ledger) are deliberately out of scope.
+(``total = archived + live``). Users and the referral ledger are
+deliberately out of scope.
 """
 
 from __future__ import annotations
@@ -28,10 +29,11 @@ from repositories.interfaces.ai import IAIReportRepository
 from repositories.interfaces.antispam import IAntiSpamRepository
 from repositories.interfaces.event_counter import IEventCounterRepository
 from repositories.interfaces.force_subscription_event import IForceSubscriptionEventRepository
+from repositories.interfaces.support import ISupportRepository
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_RETENTION_DAYS = 90
+DEFAULT_RETENTION_DAYS = 31
 DEFAULT_BATCH_SIZE = 5000
 # Upper bound on batches per run so one pass can never hog the DB; the
 # remainder is picked up by the next scheduled run.
@@ -44,6 +46,7 @@ class RetentionRepositories:
     membership: IForceSubscriptionEventRepository
     ai_reports: IAIReportRepository
     counters: IEventCounterRepository
+    support: ISupportRepository
 
 
 RetentionScope = Callable[[], AbstractAsyncContextManager[RetentionRepositories]]
@@ -85,6 +88,7 @@ class RetentionService:
             ("antispam_events", self._prune_antispam),
             ("membership_events", self._prune_membership),
             ("ai_reports", self._prune_ai_reports),
+            ("support_tickets_closed", self._prune_closed_tickets),
         ):
             try:
                 result.deleted[name] = await step(cutoff)
@@ -127,6 +131,12 @@ class RetentionService:
         # No lifetime total is shown for reports, so nothing to archive.
         return await self._batched(
             lambda repos, limit: repos.ai_reports.delete_before(cutoff, limit), counter_kind=None
+        )
+
+    async def _prune_closed_tickets(self, cutoff: datetime) -> int:
+        return await self._batched(
+            lambda repos, limit: repos.support.delete_closed_before(cutoff, limit),
+            counters.SUPPORT_TICKETS_CLOSED,
         )
 
     async def _batched(

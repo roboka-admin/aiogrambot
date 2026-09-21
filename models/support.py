@@ -15,6 +15,7 @@ class SupportTicket:
     message: str
     status: SupportStatus = SupportStatus.OPEN
     created_at: datetime | None = None
+    closed_at: datetime | None = None  # set when status becomes CLOSED; drives retention
 
 
 @dataclass(slots=True)
