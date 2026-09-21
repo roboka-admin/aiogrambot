@@ -1,0 +1,6 @@
+from typing import Protocol
+
+
+class IEventCounterRepository(Protocol):
+    async def add(self, kind: str, amount: int) -> None: ...
+    async def get(self, kind: str) -> int: ...

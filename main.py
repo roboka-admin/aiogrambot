@@ -10,6 +10,8 @@ from config import (
     ADMIN_IDS,
     BOT_TOKEN,
     DATABASE_URL,
+    EVENT_RETENTION_DAYS,
+    EVENT_RETENTION_INTERVAL_SECONDS,
     MONITORING_ENABLED,
     MONITORING_INTERVAL_SECONDS,
 )
@@ -19,6 +21,7 @@ from core.errors import handle_error
 from core.health import start_health_server, stop_health_server
 from core.log_buffer import ErrorLogBuffer
 from core.monitoring_runner import start_monitoring, stop_monitoring
+from core.retention_runner import start_retention, stop_retention
 from core.telegram import AiogramTelegramGateway
 from core.transaction import SessionTransactionManager
 from handlers.admin import router as admin_router
@@ -50,12 +53,15 @@ from models.admin import AdminStatus
 from repositories.admin import AdminRepository
 from repositories.ai import AIProviderRepository, AIReportRepository
 from repositories.antispam import AntiSpamRepository
+from repositories.event_counter import EventCounterRepository
+from repositories.force_subscription_event import ForceSubscriptionEventRepository
 from repositories.bot_settings import BotSettingsRepository
 from repositories.user import UserRepository
 from services.admin import AdminService
 from services.ai import AIRouter
 from services.monitoring import MonitoringService
 from services.monitoring.analysis import AIAnalyzer
+from services.retention import RetentionRepositories, RetentionService
 from services.system import SystemService
 
 
@@ -75,6 +81,23 @@ async def bootstrap_admin_system(database: Database) -> Iterable[int]:
             for admin in admins
             if admin.status is AdminStatus.ACTIVE
         )
+
+
+def build_retention_service(database: Database) -> RetentionService:
+    """Each pruning batch runs in its own short committed transaction."""
+
+    @asynccontextmanager
+    async def scope():
+        async with database.get_session() as session:
+            async with session.begin():
+                yield RetentionRepositories(
+                    antispam=AntiSpamRepository(session),
+                    membership=ForceSubscriptionEventRepository(session),
+                    ai_reports=AIReportRepository(session),
+                    counters=EventCounterRepository(session),
+                )
+
+    return RetentionService(scope=scope, retention_days=EVENT_RETENTION_DAYS)
 
 
 def build_monitoring_service(
@@ -150,10 +173,16 @@ async def main() -> None:
     system_service = SystemService(database=database)
     health_runner = await start_health_server()
     monitoring_task = None
+    retention_task = None
 
     try:
         active_admin_ids = await bootstrap_admin_system(database)
         await setup_bot_commands(bot, active_admin_ids)
+
+        retention_task = start_retention(
+            build_retention_service(database),
+            interval_seconds=EVENT_RETENTION_INTERVAL_SECONDS,
+        )
 
         # Always built so the admin panel can run "analyse now"; the
         # background loop itself is opt-in via MONITORING_ENABLED.
@@ -210,6 +239,7 @@ async def main() -> None:
         await dp.start_polling(bot)
     finally:
         await stop_monitoring(monitoring_task)
+        await stop_retention(retention_task)
         await stop_health_server(health_runner)
         await database.dispose()
 

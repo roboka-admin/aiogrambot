@@ -13,6 +13,7 @@ from repositories.ai import AIProviderRepository, AIReportRepository
 from repositories.antispam import AntiSpamRepository
 from repositories.bot_settings import BotSettingsRepository
 from repositories.broadcast import BroadcastRepository
+from repositories.event_counter import EventCounterRepository
 from repositories.force_subscription import ForceSubscriptionRepository
 from repositories.force_subscription_event import ForceSubscriptionEventRepository
 from repositories.referral import ReferralRepository
@@ -70,6 +71,7 @@ class ServicesMiddleware(BaseMiddleware):
             referral_reward_repository = ReferralRewardRepository(session)
             ai_provider_repository = AIProviderRepository(session)
             ai_report_repository = AIReportRepository(session)
+            event_counter_repository = EventCounterRepository(session)
             telegram_gateway = AiogramTelegramGateway(data["bot"])
 
             @asynccontextmanager
@@ -101,12 +103,14 @@ class ServicesMiddleware(BaseMiddleware):
             antispam_service = AntiSpamService(
                 antispam_repository=antispam_repository,
                 transaction_manager=transaction_manager,
+                counter_repository=event_counter_repository,
             )
             force_subscription_service = ForceSubscriptionService(
                 telegram_gateway=telegram_gateway,
                 repository=force_subscription_repository,
                 event_repository=force_subscription_event_repository,
                 transaction_manager=transaction_manager,
+                counter_repository=event_counter_repository,
             )
             notification_service = NotificationService(telegram_gateway=telegram_gateway)
             admin_service = AdminService(

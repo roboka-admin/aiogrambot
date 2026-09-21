@@ -4,8 +4,10 @@ from enum import Enum
 
 from core.timezone import tehran_now
 from core.transaction import NullTransactionManager, TransactionManager, transactional
+from models import event_counter as counters
 from models.force_subscription import ForceSubscriptionTarget, ForceSubscriptionTargetType
 from models.force_subscription_event import ForceSubscriptionMembershipEvent
+from repositories.interfaces.event_counter import IEventCounterRepository
 from repositories.interfaces.force_subscription import IForceSubscriptionRepository
 from repositories.interfaces.force_subscription_event import IForceSubscriptionEventRepository
 from services.telegram import TelegramGateway, TelegramGatewayError, TelegramRateLimitError
@@ -55,10 +57,13 @@ class ForceSubscriptionService:
         repository: IForceSubscriptionRepository,
         event_repository: IForceSubscriptionEventRepository | None = None,
         transaction_manager: TransactionManager | None = None,
+        counter_repository: IEventCounterRepository | None = None,
     ) -> None:
         self._telegram_gateway = telegram_gateway
         self._repository = repository
         self._event_repository = event_repository
+        # Lifetime totals = rows archived by retention + rows still present.
+        self._counter_repository = counter_repository
         self._transaction_manager = transaction_manager or NullTransactionManager()
 
     @transactional
@@ -201,7 +206,8 @@ class ForceSubscriptionService:
 
         today = tehran_now().replace(hour=0, minute=0, second=0, microsecond=0)
         return {
-            "total": await self._event_repository.count_total(),
+            "total": await self._archived(counters.MEMBERSHIP_EVENTS)
+            + await self._event_repository.count_total(),
             "today": await self._event_repository.count_since(today),
             "last_7_days": await self._event_repository.count_since(today - timedelta(days=7)),
             "last_30_days": await self._event_repository.count_since(today - timedelta(days=30)),
@@ -216,7 +222,8 @@ class ForceSubscriptionService:
 
         today = tehran_now().replace(hour=0, minute=0, second=0, microsecond=0)
         return {
-            "total": await self._event_repository.count_target_total(target_chat_id),
+            "total": await self._archived(counters.membership_target_kind(target_chat_id))
+            + await self._event_repository.count_target_total(target_chat_id),
             "today": await self._event_repository.count_target_since(target_chat_id, today),
             "last_7_days": await self._event_repository.count_target_since(
                 target_chat_id, today - timedelta(days=7)
@@ -225,3 +232,8 @@ class ForceSubscriptionService:
                 target_chat_id, today - timedelta(days=30)
             ),
         }
+
+    async def _archived(self, kind: str) -> int:
+        if self._counter_repository is None:
+            return 0
+        return await self._counter_repository.get(kind)

@@ -131,6 +131,15 @@ class AIReportRepository(IAIReportRepository):
         tokens_in, tokens_out = result.one()
         return int(tokens_in), int(tokens_out)
 
+    async def delete_before(self, cutoff: datetime, limit: int) -> int:
+        """Delete up to ``limit`` reports older than ``cutoff``; returns rows removed."""
+        result = await self._session.execute(
+            delete(AIReportRecord)
+            .where(AIReportRecord.created_at < cutoff)
+            .with_dialect_options(mysql_limit=limit)
+        )
+        return int(result.rowcount or 0)
+
     @staticmethod
     def _to_domain(record: AIReportRecord) -> AIReport:
         return AIReport(

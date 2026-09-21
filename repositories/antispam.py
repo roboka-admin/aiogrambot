@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.antispam import AntiSpamEvent, AntiSpamEventType
@@ -72,6 +72,18 @@ class AntiSpamRepository(IAntiSpamRepository):
             )
         )
         return result.scalar_one()
+
+    async def delete_before(self, cutoff: datetime, event_type: AntiSpamEventType, limit: int) -> int:
+        """Delete up to ``limit`` events of one type older than ``cutoff``; returns rows removed."""
+        result = await self._session.execute(
+            delete(AntiSpamEventRecord)
+            .where(
+                AntiSpamEventRecord.created_at < cutoff,
+                AntiSpamEventRecord.event_type == event_type,
+            )
+            .with_dialect_options(mysql_limit=limit)
+        )
+        return int(result.rowcount or 0)
 
     @staticmethod
     def _to_domain(record: AntiSpamEventRecord) -> AntiSpamEvent:

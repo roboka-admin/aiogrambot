@@ -30,6 +30,7 @@ def _enter_service_patches(stack: ExitStack) -> dict[str, MagicMock]:
         "ReferralRewardRepository",
         "AIProviderRepository",
         "AIReportRepository",
+        "EventCounterRepository",
         "AiogramTelegramGateway",
         "RegisterService",
         "UserService",
@@ -110,12 +111,14 @@ async def test_services_middleware_creates_and_injects_request_scoped_dependenci
     mocks["AntiSpamService"].assert_called_once_with(
         antispam_repository=mocks["AntiSpamRepository"].return_value,
         transaction_manager=transaction_manager,
+        counter_repository=mocks["EventCounterRepository"].return_value,
     )
     mocks["ForceSubscriptionService"].assert_called_once_with(
         telegram_gateway=mocks["AiogramTelegramGateway"].return_value,
         repository=mocks["ForceSubscriptionRepository"].return_value,
         event_repository=mocks["ForceSubscriptionEventRepository"].return_value,
         transaction_manager=transaction_manager,
+        counter_repository=mocks["EventCounterRepository"].return_value,
     )
     mocks["NotificationService"].assert_called_once_with(
         telegram_gateway=mocks["AiogramTelegramGateway"].return_value

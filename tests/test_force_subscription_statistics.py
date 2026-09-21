@@ -86,3 +86,30 @@ async def test_membership_statistics_use_expected_period_boundaries() -> None:
 
     assert stats == {"total": 100, "today": 10, "last_7_days": 40, "last_30_days": 80}
     assert event_repository.count_since.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_membership_totals_include_rows_archived_by_retention() -> None:
+    event_repository = MagicMock()
+    event_repository.count_total = AsyncMock(return_value=5)
+    event_repository.count_since = AsyncMock(return_value=1)
+    event_repository.count_target_total = AsyncMock(return_value=2)
+    event_repository.count_target_since = AsyncMock(return_value=1)
+    archived = {"membership_events": 100, "membership_events:-1001": 60}
+    counter_repository = MagicMock()
+    counter_repository.get = AsyncMock(side_effect=lambda kind: archived.get(kind, 0))
+
+    service = ForceSubscriptionService(
+        telegram_gateway=MagicMock(),
+        repository=MagicMock(),
+        event_repository=event_repository,
+        counter_repository=counter_repository,
+    )
+
+    overall = await service.get_membership_statistics()
+    per_target = await service.get_target_membership_statistics(-1001)
+    other_target = await service.get_target_membership_statistics(-2002)
+
+    assert overall["total"] == 105 and overall["today"] == 1
+    assert per_target["total"] == 62
+    assert other_target["total"] == 2

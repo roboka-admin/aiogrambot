@@ -12,6 +12,7 @@ from models.ai_db import AIProviderRecord, AIReportRecord
 from models.antispam_db import AntiSpamEventRecord
 from models.bot_settings_db import BotSettingsRecord
 from models.broadcast_db import BroadcastRecordRecord
+from models.event_counter_db import EventCounterRecord
 from models.force_subscription_db import ForceSubscriptionMembershipEventRecord
 from models.force_subscription_db import ForceSubscriptionTargetRecord
 from models.referral_reward_db import ReferralRewardRecord

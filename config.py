@@ -15,6 +15,10 @@ ADMIN_IDS = {
 # Background health monitoring (alerts to admins). Interval in seconds.
 MONITORING_ENABLED = os.getenv("MONITORING_ENABLED", "true").lower() not in {"0", "false", "no"}
 MONITORING_INTERVAL_SECONDS = int(os.getenv("MONITORING_INTERVAL_SECONDS", "300"))
+# Event-table retention (anti-spam, membership checks, AI reports). Must stay
+# above 30 so the 30-day admin statistics are unaffected.
+EVENT_RETENTION_DAYS = int(os.getenv("EVENT_RETENTION_DAYS", "90"))
+EVENT_RETENTION_INTERVAL_SECONDS = int(os.getenv("EVENT_RETENTION_INTERVAL_SECONDS", str(6 * 3600)))
 
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is not configured")

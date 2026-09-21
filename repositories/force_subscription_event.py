@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.force_subscription_event import ForceSubscriptionMembershipEvent
@@ -61,3 +61,23 @@ class ForceSubscriptionEventRepository(IForceSubscriptionEventRepository):
             )
         )
         return result.scalar_one()
+
+    async def list_target_ids_before(self, cutoff: datetime) -> list[int]:
+        result = await self._session.execute(
+            select(ForceSubscriptionMembershipEventRecord.target_chat_id)
+            .where(ForceSubscriptionMembershipEventRecord.created_at < cutoff)
+            .distinct()
+        )
+        return [int(value) for value in result.scalars()]
+
+    async def delete_before(self, cutoff: datetime, target_chat_id: int, limit: int) -> int:
+        """Delete up to ``limit`` events of one target older than ``cutoff``; returns rows removed."""
+        result = await self._session.execute(
+            delete(ForceSubscriptionMembershipEventRecord)
+            .where(
+                ForceSubscriptionMembershipEventRecord.created_at < cutoff,
+                ForceSubscriptionMembershipEventRecord.target_chat_id == target_chat_id,
+            )
+            .with_dialect_options(mysql_limit=limit)
+        )
+        return int(result.rowcount or 0)
